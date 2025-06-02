@@ -22,7 +22,7 @@ export default function Home() {
                 <h1 className="text-5xl md:text-7xl font-extrabold mb-6 text-brand-dark leading-tight tracking-tight">
                   MODERN,
                   <br />
-                  AI-POWERED TEST
+                  AI-POWERED
                   <br />
                   JUNK REMOVAL
                 </h1>
@@ -371,7 +371,7 @@ export default function Home() {
               </ul>
             </div>
           </div>
-          <div className="border-t border-border mt-10 pt-8 text-center text-muted-foreground">
+          <div className="border-t border-gray-200 mt-10 pt-8 text-center text-muted-foreground">
             <p>&copy; {new Date().getFullYear()} Junk Butler. All rights reserved.</p>
           </div>
         </div>
