@@ -85,6 +85,7 @@ export async function POST(req: Request) {
   try {
     // Extract the messages from the body of the request
     const { messages } = await req.json()
+    console.log("🛠️ [API] Received messages:", messages)
 
     // Log message count and last message for debugging
     console.log(
@@ -95,6 +96,7 @@ export async function POST(req: Request) {
 
     // Check if XAI_API_KEY is available
     const apiKey = process.env.XAI_PAID_API_KEY || process.env.XAI_API_KEY || process.env.GROQ_API_KEY
+    console.log("🔐 [API] Using API key:", apiKey ? "Defined" : "Missing")
     if (!apiKey) {
       console.warn("No API key is defined in environment variables, using mock implementation")
       return getMockResponse(messages)
