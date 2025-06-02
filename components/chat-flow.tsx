@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Camera, Upload, Send, Paperclip, Smile, Bot, ArrowRight, AlertCircle, RefreshCw } from "lucide-react"
+import { Camera, Upload, Send, Paperclip, Smile, Bot, ArrowRight, AlertCircle, RefreshCw, ArrowUp } from "lucide-react"
 import { useChat } from "ai/react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AutoResizeTextarea } from "@/components/autoresize-textarea"
@@ -426,8 +426,10 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
     }, 800) // Faster response
   }
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSendMessage = (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault()
+    }
 
     const messageText = mode === "ai" ? aiInput.trim() : currentInput.trim()
     if (!messageText) return
@@ -760,7 +762,7 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
                   <button
                     key={emoji}
                     type="button"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-lg hover:bg-muted"
+                    className="inline-flex h-8 w-8 items-start justify-center rounded-md text-lg hover:bg-muted"
                     onClick={() => handleEmojiSelect(emoji)}
                   >
                     {emoji}
@@ -790,26 +792,28 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
           />
 
           <div className="relative flex-1">
-            <AutoResizeTextarea
-              placeholder="Type a message..."
-              value={mode === "ai" ? aiInput : currentInput}
-              onChange={mode === "ai" ? 
-                (value) => handleAiInputChange({ target: { value } } as React.ChangeEvent<HTMLInputElement>) : 
-                (value) => setCurrentInput(value)
-              }
-              className="w-full px-4 py-2 rounded-full bg-muted/50"
-            />
+            <div className="border-input bg-background focus-within:ring-ring/10 relative flex items-center rounded-[16px] border px-4 py-1.5 pr-10 text-sm focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-0 min-h-[42px]">
+              <AutoResizeTextarea
+                placeholder="Type a message..."
+                value={mode === "ai" ? aiInput : currentInput}
+                onChange={mode === "ai" ? 
+                  (value) => handleAiInputChange({ target: { value } } as React.ChangeEvent<HTMLInputElement>) : 
+                  (value) => setCurrentInput(value)
+                }
+                onEnter={handleSendMessage}
+                className="resize-none overflow-hidden placeholder:text-muted-foreground flex-1 bg-transparent focus:outline-none py-1 leading-6"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground px-3 absolute top-3 right-2 size-6 rounded-full"
+                disabled={(mode === "ai" ? !aiInput.trim() : !currentInput.trim()) || isAiLoading || isRetrying}
+              >
+                <ArrowUp className="h-4 w-4" />
+                <span className="sr-only">Send message</span>
+              </Button>
+            </div>
           </div>
-
-          <Button
-            type="submit"
-            size="icon"
-            className="h-9 w-9 rounded-full bg-brand-green hover:bg-brand-green/90"
-            disabled={(mode === "ai" ? !aiInput.trim() : !currentInput.trim()) || isAiLoading || isRetrying}
-          >
-            <Send className="h-4 w-4 text-white" />
-            <span className="sr-only">Send message</span>
-          </Button>
         </div>
 
         {/* Mode switcher and reset button */}
