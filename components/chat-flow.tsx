@@ -217,8 +217,14 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
       // Reset AI messages to start fresh
       setAiMessages([])
 
-      // Let the AI's first message come through naturally via the API
-      // The system prompt is configured to handle the introduction
+      // Add the initial AI message
+      appendAiMessage({
+        role: "assistant",
+        content: "Ah, splendid timing—I'm Junksworth, your ever-reliable butler for banishing junk. Let's get the lowdown: What type of items are we dealing with, and how much is there? Oh, and don't forget to mention your location, any access hurdles, and your ideal pickup time."
+      })
+
+      // Clear input after switching modes
+      setCurrentInput("")
     } catch (error) {
       console.error("Error starting AI chat:", error)
       setAiErrorMessage("Failed to initialize AI chat. Let's continue with the guided flow instead.")
@@ -434,7 +440,12 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
         console.log("Initializing AI chat with message:", messageText)
         // Clear any previous AI messages
         setAiMessages([])
-        // Add the user's message to the AI chat
+        // Add the initial AI message first
+        appendAiMessage({
+          role: "assistant",
+          content: "Ah, splendid timing—I'm Junksworth, your ever-reliable butler for banishing junk. Let's get the lowdown: What type of items are we dealing with, and how much is there? Oh, and don't forget to mention your location, any access hurdles, and your ideal pickup time."
+        })
+        // Then add the user's message
         appendAiMessage({ role: "user", content: messageText })
         // Clear input after sending
         setCurrentInput("")
