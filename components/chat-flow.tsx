@@ -78,11 +78,11 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Set up AI chat using the AI SDK with retry capability
+  // xAI compatibility: useChat API with new working setup
   const {
     messages: aiMessages,
     input: aiInput,
     handleInputChange: handleAiInputChange,
-    handleSubmit: handleAiSubmit,
     isLoading: isAiLoading,
     append: appendAiMessage,
     error: aiError,
@@ -91,52 +91,39 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
   } = useChat({
     api: "/api/chat",
     onFinish: (message) => {
-      console.log("AI message finished:", message.id)
-
-      // Check for empty content
+      // Defensive: xAI returns {id, role, content}
       if (!message.content || message.content.trim() === "") {
-        console.warn("Received empty message from AI")
-
-        // Add a fallback message
+        // Fallback for empty AI message
         const fallbackMessage = {
           id: `fallback-${Date.now()}`,
           role: "assistant" as const,
           content:
             "I seem to be having trouble formulating a response. Let me try again. What details can you provide about your junk removal needs?",
         }
-
-        // Replace the empty message with our fallback
         setAiMessages((prev) => {
           const filtered = prev.filter((m) => m.id !== message.id)
           return [...filtered, fallbackMessage]
         })
-
         return
       }
-
-      // Reset retry count on successful message
       setRetryCount(0)
       setIsRetrying(false)
-
-      // Check if the message contains JSON data for estimate
+      // Try to parse JSON (optional, for future)
       try {
         if (message.content.includes("{") && message.content.includes("}")) {
           const jsonMatch = message.content.match(/\{[\s\S]*\}/)
           if (jsonMatch) {
             const jsonData = JSON.parse(jsonMatch[0])
-            console.log("Estimate data received:", jsonData)
+            // Optionally use jsonData
+            // console.log("Estimate data received:", jsonData)
           }
         }
       } catch (error) {
-        console.error("Error parsing JSON from AI response:", error)
+        // console.error("Error parsing JSON from AI response:", error)
       }
     },
     onError: (error) => {
-      console.error("AI chat error:", error)
-
-      // Set a user-friendly error message
       let errorMsg = "Sorry, I'm having trouble connecting to my brain right now."
-
       if (error instanceof Error) {
         if (error.message.includes("API key")) {
           errorMsg = "My AI brain is not properly configured. Please contact support."
@@ -146,13 +133,9 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
           errorMsg = "I received an empty response. This might be due to reaching my conversation limits."
         }
       }
-
-      // Implement retry logic (up to 3 times)
       if (retryCount < 3) {
         setRetryCount((prev) => prev + 1)
         setIsRetrying(true)
-
-        // Add a retry message
         setMessages((prev) => [
           ...prev,
           {
@@ -161,18 +144,13 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
             content: `Connection hiccup! Retrying... (Attempt ${retryCount + 1}/3)`,
           },
         ])
-
-        // Wait a moment and retry
         setTimeout(() => {
-          console.log(`Retrying AI connection (attempt ${retryCount + 1})...`)
           reloadMessages()
           setIsRetrying(false)
         }, 2000)
       } else {
-        // After 3 retries, show error and fall back to guided mode
         setAiErrorMessage(errorMsg)
         setIsRetrying(false)
-
         if (mode === "ai") {
           setMessages((prev) => [
             ...prev,
@@ -497,7 +475,7 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
         console.log("Sending message to AI:", messageText)
 
         appendAiMessage({ role: "user", content: messageText })
-        // Clear input after sending
+        // Clear input after sending (xAI: set value directly)
         handleAiInputChange({ target: { value: "" } } as React.ChangeEvent<HTMLInputElement>)
       } catch (error) {
         console.error("Error sending message to AI:", error)
