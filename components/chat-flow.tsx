@@ -4,11 +4,11 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Camera, Upload, Send, Paperclip, Smile, Bot, ArrowRight, AlertCircle, RefreshCw } from "lucide-react"
 import { useChat } from "ai/react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AutoResizeTextarea } from "@/components/autoresize-textarea"
 
 type Message = {
   id: string
@@ -790,11 +790,14 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
           />
 
           <div className="relative flex-1">
-            <Input
+            <AutoResizeTextarea
               placeholder="Type a message..."
               value={mode === "ai" ? aiInput : currentInput}
-              onChange={mode === "ai" ? handleAiInputChange : (e) => setCurrentInput(e.target.value)}
-              className="pr-10 py-5 rounded-full bg-muted/50"
+              onChange={mode === "ai" ? 
+                (value) => handleAiInputChange({ target: { value } } as React.ChangeEvent<HTMLInputElement>) : 
+                (value) => setCurrentInput(value)
+              }
+              className="w-full px-4 py-2 rounded-full bg-muted/50"
             />
           </div>
 
