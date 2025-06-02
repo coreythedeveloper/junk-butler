@@ -214,14 +214,12 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
       setAiErrorMessage(null)
       setRetryCount(0)
 
-      // Reset AI messages to start fresh
-      setAiMessages([])
-
-      // Add the initial AI message
-      appendAiMessage({
+      // Reset AI messages to start fresh and add initial message
+      setAiMessages([{
+        id: Date.now().toString(),
         role: "assistant",
         content: "Ah, splendid timing—I'm Junksworth, your ever-reliable butler for banishing junk. Let's get the lowdown: What type of items are we dealing with, and how much is there? Oh, and don't forget to mention your location, any access hurdles, and your ideal pickup time."
-      })
+      }])
 
       // Clear input after switching modes
       setCurrentInput("")
@@ -438,15 +436,19 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
       // Initialize AI chat with the user's message
       try {
         console.log("Initializing AI chat with message:", messageText)
-        // Clear any previous AI messages
-        setAiMessages([])
-        // Add the initial AI message first
-        appendAiMessage({
-          role: "assistant",
-          content: "Ah, splendid timing—I'm Junksworth, your ever-reliable butler for banishing junk. Let's get the lowdown: What type of items are we dealing with, and how much is there? Oh, and don't forget to mention your location, any access hurdles, and your ideal pickup time."
-        })
-        // Then add the user's message
-        appendAiMessage({ role: "user", content: messageText })
+        // Set initial AI messages with welcome and user message
+        setAiMessages([
+          {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: "Ah, splendid timing—I'm Junksworth, your ever-reliable butler for banishing junk. Let's get the lowdown: What type of items are we dealing with, and how much is there? Oh, and don't forget to mention your location, any access hurdles, and your ideal pickup time."
+          },
+          {
+            id: (Date.now() + 1).toString(),
+            role: "user",
+            content: messageText
+          }
+        ])
         // Clear input after sending
         setCurrentInput("")
       } catch (error) {
