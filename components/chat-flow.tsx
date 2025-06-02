@@ -186,23 +186,10 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
   // Initialize chat with welcome message
   useEffect(() => {
     const timer = setTimeout(() => {
-      setMessages([
-        {
-          id: "welcome",
-          type: "system",
-          content:
-            "👋 ☕️ 🎩 I'm Junksworth, Junk Butler's resident genius, here to banish your clutter with flair. What junk are we wrestling today? Describe the mess—furniture, appliances, or something gloriously weird—and I'll whip up a custom estimate. Go!",
-        },
-      ])
-
-      setIsTyping(true)
-
-      setTimeout(() => {
-        setIsTyping(false)
-        setMessages((prev) => [
-          ...prev,
+      if (mode === "guided") {
+        setMessages([
           {
-            id: "quantity-question",
+            id: "welcome",
             type: "system",
             content: "Are you removing one item or multiple items?",
             options: [
@@ -212,11 +199,11 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
           },
         ])
         setCurrentStep(1)
-      }, 800) // Slightly faster initial response
+      }
     }, 300) // Faster initial load
 
     return () => clearTimeout(timer)
-  }, [])
+  }, [mode])
 
   const switchToAiMode = () => {
     try {
@@ -230,15 +217,8 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
       // Reset AI messages to start fresh
       setAiMessages([])
 
-      // Add the first AI message to the UI
-      appendAiMessage({
-        role: "assistant",
-        content:
-          "Ah, you've summoned me directly! I'm Junksworth, at your service. Tell me about your junk situation, and I'll craft you a splendid estimate with my superior intellect.",
-      })
-
-      // Clear input after switching modes
-      setCurrentInput("")
+      // Let the AI's first message come through naturally via the API
+      // The system prompt is configured to handle the introduction
     } catch (error) {
       console.error("Error starting AI chat:", error)
       setAiErrorMessage("Failed to initialize AI chat. Let's continue with the guided flow instead.")
@@ -475,9 +455,8 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
       // In AI mode, use the AI SDK to handle the message
       try {
         console.log("Sending message to AI:", messageText)
-
         appendAiMessage({ role: "user", content: messageText })
-        // Clear input after sending (xAI: set value directly)
+        // Clear input after sending
         handleAiInputChange({ target: { value: "" } } as React.ChangeEvent<HTMLInputElement>)
       } catch (error) {
         console.error("Error sending message to AI:", error)
@@ -507,7 +486,7 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
             content: "Thanks for your message! I'll help you with that request.",
           },
         ])
-      }, 1000) // Faster response
+      }, 1000)
     }
   }
 
@@ -675,7 +654,7 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
 
         {/* Render AI mode messages */}
         {mode === "ai" &&
-          aiMessages.map((message, index) => (
+          aiMessages.filter(message => message.content.trim() !== "").map((message, index) => (
             <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
               {message.role === "assistant" && (
                 <div className="mr-2 flex-shrink-0">
