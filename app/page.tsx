@@ -20,11 +20,11 @@ export default function Home() {
             <div className="flex flex-col lg:flex-row items-center">
               <div className="w-full lg:w-1/2 py-16 lg:py-24 px-4 lg:pr-8">
                 <h1 className="text-5xl md:text-7xl font-extrabold mb-6 text-brand-dark leading-tight tracking-tight">
-                  MODERN
+                  MODERN,
                   <br />
-                  JUNK
+                  AI-POWERED
                   <br />
-                  REMOVAL
+                  JUNK REMOVAL
                 </h1>
                 <p className="text-lg md:text-xl mb-10 text-brand-dark/80 max-w-lg">
                   AI-powered junk removal and resale service. Get an instant estimate, schedule a pickup, and we'll
