@@ -23,60 +23,38 @@ const SYSTEM_PROMPT = `You are Junksworth, a sassy, witty, and mildly exasperate
 
 // Mock response function for when the API key is not available or when there's an error
 async function getMockResponse(messages: any[]) {
-  // Create a mock response
   const lastMessage = messages[messages.length - 1]
-  let responseContent = ""
+  let responseContent = "Hmm, I seem to have lost my wit for the moment."
 
   if (lastMessage.role === "user") {
     const userMessage = lastMessage.content.toLowerCase()
 
     if (userMessage.includes("hello") || userMessage.includes("hi")) {
-      responseContent =
-        "Greetings, human! I'm Junksworth, your personal junk removal butler. What treasures are you looking to part with today?"
-    } else if (userMessage.includes("furniture") || userMessage.includes("couch") || userMessage.includes("sofa")) {
-      responseContent =
-        "Ah, furniture! The silent witnesses to your questionable Netflix binges. A couch, is it? Do tell me more about this soon-to-be-departed sitting apparatus. Size? Condition? Any mysterious stains I should be aware of? *adjusts monocle*"
-    } else if (userMessage.includes("price") || userMessage.includes("cost") || userMessage.includes("estimate")) {
-      responseContent =
-        "Eager to discuss finances, I see! For a precise estimate, I'll need more details about your junk situation. What items are we talking about? Where are they located? The more specifics you provide, the more accurate my pricing powers become."
+      responseContent = "Greetings, human! I'm Junksworth. What junk are we sending to the abyss today?"
     } else if (userMessage.includes("mattress")) {
-      responseContent =
-        "A mattress, you say? The final resting place of countless dreams and nightmares. To properly estimate this bedtime story's removal, I'll need to know: is it twin, queen, or king-sized? And where is this sleep rectangle currently located? Any stairs or tight doorways in its escape route?"
-    } else if (userMessage.includes("address") || userMessage.includes("location")) {
-      responseContent =
-        "Ah, location details! The 'where' in our little junk removal drama. I've noted your address. Any particular access challenges I should be aware of? Secret passages? Moats filled with alligators? Narrow hallways that would make a supermodel feel claustrophobic?"
-    } else if (userMessage.includes("stairs") || userMessage.includes("steps")) {
-      responseContent =
-        "Steep stairs, you say? The plot thickens! And you'd like this mattress exorcism performed early next week? Let me check my calendar... I can offer Monday or Tuesday between 9am-12pm or 1pm-4pm. Which time slot would suit your schedule better?"
+      responseContent = "A mattress, you say? Twin, queen, or king? And where is it haunting your home?"
     } else {
-      responseContent =
-        "Fascinating! Tell me more about these items you wish to banish from your life. The more details you provide, the better I can estimate the cost of making them... disappear. *dramatic butler gesture*"
+      responseContent = "Do go on. Tell me more about your trashy treasures."
     }
   }
 
-  // Create a ReadableStream to simulate streaming response
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
-    start(controller) {
-      // Send the response character by character to simulate streaming
-      const characters = responseContent.split("")
-      let i = 0
-
-      const interval = setInterval(() => {
-        if (i < characters.length) {
-          controller.enqueue(encoder.encode(characters[i]))
-          i++
-        } else {
-          clearInterval(interval)
-          controller.close()
-        }
-      }, 10) // Faster streaming (10ms instead of 20ms)
+    async start(controller) {
+      for (const char of responseContent) {
+        controller.enqueue(encoder.encode(char))
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      controller.close()
     },
   })
 
   return new Response(stream, {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Transfer-Encoding": "chunked",
     },
   })
 }
