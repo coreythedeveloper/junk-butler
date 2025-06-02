@@ -22,7 +22,7 @@ export default function Home() {
                 <h1 className="text-5xl md:text-7xl font-extrabold mb-6 text-brand-dark leading-tight tracking-tight">
                   MODERN,
                   <br />
-                  AI-POWERED
+                  AI-POWERED TEST
                   <br />
                   JUNK REMOVAL
                 </h1>
