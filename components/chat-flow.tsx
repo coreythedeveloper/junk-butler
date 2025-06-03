@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import type { Message as AiMessage, CreateMessage } from "ai"
 
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
@@ -10,15 +11,14 @@ import { useChat } from "ai/react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AutoResizeTextarea } from "@/components/autoresize-textarea"
 
-type Message = {
-  id: string
-  type: "system" | "user" | "ai"
-  content: string | React.ReactNode
+// Extend the AI SDK types
+type ExtendedMessage = (AiMessage | CreateMessage) & {
+  type?: "system" | "user" | "ai"
   options?: {
     value: string
     label: string
   }[]
-  role?: "user" | "assistant" // For AI SDK compatibility
+  isGuided?: boolean
 }
 
 type ChatFlowProps = {
@@ -62,6 +62,7 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
   const [currentInput, setCurrentInput] = useState("")
   const [currentStep, setCurrentStep] = useState(0)
   const [isTyping, setIsTyping] = useState(false)
+  const [guidedMessageIds, setGuidedMessageIds] = useState<Set<string>>(new Set())
   const [chatData, setChatData] = useState({
     quantity: "" as "single" | "multiple",
     items: [] as string[],
@@ -90,7 +91,7 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
     { value: "other", label: "Other" },
   ]
 
-  // Set up AI chat
+  // Update the useChat hook to use our extended type
   const {
     messages: aiMessages,
     input: aiInput,
@@ -103,29 +104,30 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
   } = useChat({
     api: "/api/chat",
     onFinish: (message) => {
-      // Try to parse structured data from AI response
       try {
         if (message.content.includes("{") && message.content.includes("}")) {
           const jsonMatch = message.content.match(/\{[\s\S]*\}/)
           if (jsonMatch) {
             const jsonData = JSON.parse(jsonMatch[0])
-            // Update chat data based on AI response
+            const formattedData = formatEstimateData(jsonData)
+            
+            // Update chat data
             setChatData(prev => ({
               ...prev,
-              ...jsonData
+              ...formattedData
             }))
 
-            // If we have all required data, complete the estimate
-            if (isEstimateComplete(jsonData)) {
-              onComplete(jsonData)
+            // If we have all required data, trigger the estimate completion
+            if (isEstimateComplete(formattedData)) {
+              onComplete(formattedData)
             }
           }
         }
+        setRetryCount(0)
+        setIsRetrying(false)
       } catch (error) {
         console.error("Error parsing JSON from AI response:", error)
       }
-      setRetryCount(0)
-      setIsRetrying(false)
     },
     onError: (error) => {
       let errorMsg = "Sorry, I'm having trouble connecting to my brain right now."
@@ -152,14 +154,21 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
     },
   })
 
+  // Helper function to add a guided message
+  const appendGuidedMessage = (message: { role: "user" | "assistant", content: string }) => {
+    const id = Date.now().toString()
+    setGuidedMessageIds(prev => new Set(prev).add(id))
+    appendAiMessage({ ...message, id })
+  }
+
   // Initialize chat with welcome message
   useEffect(() => {
     const timer = setTimeout(() => {
       setAiMessages([])
       setCurrentStep(1)
-      appendAiMessage({
+      appendGuidedMessage({
         role: "assistant",
-        content: "Are you removing one item or multiple items?",
+        content: "Are you removing one item or multiple items?"
       })
     }, 300)
 
@@ -168,20 +177,63 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
 
   // Helper function to check if we have all required data for an estimate
   const isEstimateComplete = (data: any) => {
-    const requiredFields = ['quantity', 'items', 'location', 'accessNotes', 'pickupTime']
+    const requiredFields = ['items', 'quantity', 'location', 'accessNotes', 'pickupTime']
     return requiredFields.every(field => data[field] && data[field] !== '')
+  }
+
+  // Helper function to format data for estimate result
+  const formatEstimateData = (data: any) => {
+    // Extract price from either estimated_cost or a calculated value
+    const price = data.estimated_cost || data.price || calculateDefaultPrice(data)
+
+    return {
+      items: data.items || [],
+      quantity: data.quantity || "single",
+      photos: data.photos || [],
+      price,
+      resale: data.resale || false,
+      location: data.location || "",
+      accessNotes: data.access_notes || data.accessNotes || "",
+      pickupTime: data.requested_pickup_time || data.pickupTime || ""
+    }
+  }
+
+  // Helper function to calculate a default price based on items and quantity
+  const calculateDefaultPrice = (data: any) => {
+    const basePrice: Record<string, number> = {
+      furniture: 150,
+      appliances: 200,
+      electronics: 100,
+      yard_waste: 120,
+      construction: 250,
+      household: 100,
+      other: 150,
+    }
+
+    if (data.quantity === "single") {
+      const itemType = data.items[0] as string
+      return basePrice[itemType] || 150
+    }
+
+    // For multiple items, sum up base prices and add complexity factor
+    return data.items.reduce((total: number, item: string) => {
+      return total + (basePrice[item] || 150)
+    }, 0)
   }
 
   const handleQuantitySelection = (value: "single" | "multiple") => {
     setChatData(prev => ({ ...prev, quantity: value }))
-    appendAiMessage({ role: "user", content: value === "single" ? "Single Item" : "Multiple Items" })
+    appendGuidedMessage({ 
+      role: "user", 
+      content: value === "single" ? "Single Item" : "Multiple Items"
+    })
     
     setIsTyping(true)
     setTimeout(() => {
       setIsTyping(false)
-      appendAiMessage({
+      appendGuidedMessage({
         role: "assistant",
-        content: "What type of items are you removing? (Select all that apply)",
+        content: "What type of items are you removing? (Select all that apply)"
       })
       setCurrentStep(2)
     }, 800)
@@ -194,13 +246,13 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
         ...prev,
         items: [...prev.items, value]
       }))
-      appendAiMessage({ role: "user", content: `Added: ${selectedItem.label}` })
+      appendGuidedMessage({ role: "user", content: `Added: ${selectedItem.label}` })
     }
   }
 
   const handleContinueAfterItems = () => {
     if (chatData.items.length === 0) {
-      appendAiMessage({
+      appendGuidedMessage({
         role: "assistant",
         content: "Please select at least one item type."
       })
@@ -208,12 +260,15 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
     }
 
     const itemLabels = chatData.items.map(value => itemTypes.find(item => item.value === value)?.label || value)
-    appendAiMessage({ role: "user", content: `Selected items: ${itemLabels.join(", ")}` })
+    appendGuidedMessage({ 
+      role: "user", 
+      content: `Selected items: ${itemLabels.join(", ")}`
+    })
 
     setIsTyping(true)
     setTimeout(() => {
       setIsTyping(false)
-      appendAiMessage({
+      appendGuidedMessage({
         role: "assistant",
         content: "Could you upload a photo of the item(s)? This helps us provide an accurate estimate."
       })
@@ -234,14 +289,17 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
     }))
 
     const photoMessage = `I've uploaded ${files.length} photo${files.length > 1 ? 's' : ''} of the items.`
-    appendAiMessage({ role: "user", content: photoMessage })
+    appendGuidedMessage({ 
+      role: "user", 
+      content: photoMessage
+    })
 
     setIsTyping(true)
     setTimeout(() => {
       setIsTyping(false)
-      appendAiMessage({
+      appendGuidedMessage({
         role: "assistant",
-        content: "Would you like us to attempt to resell your item(s)? You'll receive a portion of the sale price if we're successful.",
+        content: "Would you like us to attempt to resell your item(s)? You'll receive a portion of the sale price if we're successful."
       })
       setCurrentStep(4)
     }, 800)
@@ -254,15 +312,15 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
       resale: wantsResale
     }))
 
-    appendAiMessage({ 
+    appendGuidedMessage({ 
       role: "user", 
-      content: wantsResale ? "Yes, try to resell" : "No, just remove them" 
+      content: wantsResale ? "Yes, try to resell" : "No, just remove them"
     })
 
     setIsTyping(true)
     setTimeout(() => {
       setIsTyping(false)
-      appendAiMessage({
+      appendGuidedMessage({
         role: "assistant",
         content: "What's your location and are there any access challenges we should know about?"
       })
@@ -281,11 +339,10 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
     // If this is the first free-form message, switch to AI mode
     if (!isAIMode) {
       setIsAIMode(true)
-      // Send the current state to the AI for context
       const context = JSON.stringify(chatData)
       appendAiMessage({ 
         role: "system", 
-        content: `Current estimate data: ${context}. Please continue gathering any missing information naturally.` 
+        content: `Current estimate data: ${context}. Please continue gathering any missing information naturally.`
       })
     }
 
@@ -375,40 +432,46 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
       )}
 
       <div className="flex-1 overflow-y-auto mb-4 space-y-4">
-        {/* Render chat messages */}
-        {aiMessages.filter(message => message.content.trim() !== "" && message.role !== "system").map((message, index) => (
-          <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-            {message.role === "assistant" && (
-              <div className="mr-2 flex-shrink-0">
-                <div className="h-8 w-8 rounded-full overflow-hidden">
-                  <img src="/images/avatar.png" alt="Junksworth" className="h-full w-full object-cover" />
+        {/* Chat Messages */}
+        {aiMessages
+          .filter(message => 
+            message.content.trim() !== "" && 
+            message.role !== "system" &&
+            (!message.content.toString().includes("{") || message.role === "user") // Hide JSON responses
+          )
+          .map((message) => (
+            <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+              {message.role === "assistant" && !guidedMessageIds.has(message.id) && (
+                <div className="mr-2 flex-shrink-0">
+                  <div className="h-8 w-8 rounded-full overflow-hidden">
+                    <img src="/images/avatar.png" alt="Junksworth" className="h-full w-full object-cover" />
+                  </div>
+                </div>
+              )}
+              <div
+                className={`max-w-[80%] rounded-lg p-3 chat-bubble-animation ${
+                  message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
+                }`}
+              >
+                <div>
+                  <p>{message.content}</p>
+                  {message.role === "assistant" && renderOptions()}
+                  {message.role === "user" && message.content.includes("uploaded") && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {chatData.photos.map((url, photoIndex) => (
+                        <img
+                          key={photoIndex}
+                          src={url}
+                          alt="Uploaded item"
+                          className="w-20 h-20 object-cover rounded-md"
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-            <div
-              className={`max-w-[80%] rounded-lg p-3 chat-bubble-animation ${
-                message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
-              }`}
-            >
-              <div>
-                <p>{message.content}</p>
-                {message.role === "assistant" && renderOptions()}
-                {message.role === "user" && message.content.includes("uploaded") && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {chatData.photos.map((url, photoIndex) => (
-                      <img
-                        key={photoIndex}
-                        src={url}
-                        alt="Uploaded item"
-                        className="w-20 h-20 object-cover rounded-md"
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
-          </div>
-        ))}
+          ))}
 
         {/* Typing indicator */}
         {(isTyping || isAiLoading || isRetrying) && (
