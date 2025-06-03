@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { CheckCircle, ArrowLeft, Truck, DollarSign } from "lucide-react"
+import { CheckCircle, ArrowLeft, Truck, DollarSign, MapPin, Clock, User } from "lucide-react"
 
 type EstimateResultProps = {
   data: {
@@ -11,6 +11,14 @@ type EstimateResultProps = {
     photos: string[]
     price: number
     resale: boolean
+    location: string
+    access_notes: string
+    pickup_time: string
+    contact_info: {
+      name: string
+      phone: string
+      email: string
+    }
   }
   onAccept: () => void
   onRestart: () => void
@@ -40,7 +48,7 @@ export function EstimateResult({ data, onAccept, onRestart }: EstimateResultProp
           </div>
 
           <p className="text-green-700 mb-6">
-            Based on the information and photos you provided, we've prepared your estimate.
+            Based on the information you provided, we've prepared your estimate.
           </p>
 
           <div className="bg-white rounded-lg p-4 mb-4 border border-green-200">
@@ -49,27 +57,57 @@ export function EstimateResult({ data, onAccept, onRestart }: EstimateResultProp
               <div className="text-2xl font-bold text-primary">${data.price}</div>
             </div>
 
-            <div className="space-y-2 mb-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Item Type:</span>
-                <span className="font-medium">{data.items.map((item) => itemLabels[item] || item).join(", ")}</span>
+            <div className="space-y-4 mb-4">
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm">Items</h4>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Type:</span>
+                  <span className="font-medium">{data.items.map((item) => itemLabels[item] || item).join(", ")}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Quantity:</span>
+                  <span className="font-medium">{data.quantity === "single" ? "Single Item" : "Multiple Items"}</span>
+                </div>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Quantity:</span>
-                <span className="font-medium">{data.quantity === "single" ? "Single Item" : "Multiple Items"}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Resale Option:</span>
-                <span className="font-medium">{data.resale ? "Yes (eligible for resale)" : "No"}</span>
-              </div>
-            </div>
 
-            {data.resale && (
-              <div className="bg-green-50 p-3 rounded-md text-sm text-green-700 mb-4">
-                <p className="font-medium">Resale Benefit</p>
-                <p>You'll receive 40% of the sale price if we successfully resell your item(s).</p>
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Location & Access
+                </h4>
+                <div className="text-sm">
+                  <p className="font-medium">{data.location}</p>
+                  <p className="text-muted-foreground">{data.access_notes}</p>
+                </div>
               </div>
-            )}
+
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Pickup Time
+                </h4>
+                <p className="text-sm">{data.pickup_time}</p>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Contact Information
+                </h4>
+                <div className="text-sm space-y-1">
+                  <p>{data.contact_info.name}</p>
+                  <p>{data.contact_info.phone}</p>
+                  <p>{data.contact_info.email}</p>
+                </div>
+              </div>
+
+              {data.resale && (
+                <div className="bg-green-50 p-3 rounded-md text-sm text-green-700">
+                  <p className="font-medium">Resale Benefit</p>
+                  <p>You'll receive 40% of the sale price if we successfully resell your item(s).</p>
+                </div>
+              )}
+            </div>
 
             <div className="border-t border-border pt-4">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">

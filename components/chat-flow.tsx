@@ -9,7 +9,6 @@ import { Camera, Upload, Send, Paperclip, Smile, Bot, ArrowRight, AlertCircle, R
 import { useChat } from "ai/react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AutoResizeTextarea } from "@/components/autoresize-textarea"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 
 type Message = {
   id: string
@@ -27,7 +26,16 @@ type ChatFlowProps = {
     items: string[]
     quantity: "single" | "multiple"
     photos: string[]
+    price: number
     resale: boolean
+    location: string
+    access_notes: string
+    pickup_time: string
+    contact_info: {
+      name: string
+      phone: string
+      email: string
+    }
   }) => void
 }
 
@@ -86,6 +94,15 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
     items: [] as string[],
     photos: [] as string[],
     resale: false,
+    price: 0,
+    location: "",
+    access_notes: "",
+    pickup_time: "",
+    contact_info: {
+      name: "",
+      phone: "",
+      email: ""
+    }
   })
   const [mode, setMode] = useState<"guided" | "ai">("guided")
   const [aiErrorMessage, setAiErrorMessage] = useState<string | null>(null)
@@ -428,9 +445,23 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
 
       // Complete the chat flow after a short delay
       setTimeout(() => {
-        onComplete(chatData)
-      }, 1500) // Faster completion
-    }, 800) // Faster response
+        onComplete({
+          ...chatData,
+          resale: wantsResale,
+          // Set a default price for the guided flow
+          price: 75,
+          // Set placeholder values for the new fields if they're empty
+          location: chatData.location || "Not specified",
+          access_notes: chatData.access_notes || "No special access notes",
+          pickup_time: chatData.pickup_time || "To be scheduled",
+          contact_info: {
+            name: chatData.contact_info.name || "Not provided",
+            phone: chatData.contact_info.phone || "Not provided",
+            email: chatData.contact_info.email || "Not provided"
+          }
+        })
+      }, 1500)
+    }, 800)
   }
 
   const handleSendMessage = (e?: React.FormEvent) => {
@@ -669,311 +700,258 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
       if (lastMessage.role === "assistant") {
         const parsedData = tryParseJSON(lastMessage.content)
         if (parsedData) {
-          setEstimateData(parsedData)
-          setShowEstimate(true)
+          // Convert AI estimate data to match the EstimateResult format
+          onComplete({
+            items: Array.isArray(parsedData.item_details.type) 
+              ? parsedData.item_details.type 
+              : [parsedData.item_details.type],
+            quantity: parsedData.item_details.quantity === 1 ? "single" : "multiple",
+            photos: [],
+            price: parsedData.estimated_cost,
+            resale: false,
+            location: parsedData.location,
+            access_notes: parsedData.access_notes,
+            pickup_time: parsedData.requested_pickup_time,
+            contact_info: parsedData.contact_info
+          })
         }
       }
     }
-  }, [aiMessages, mode])
+  }, [aiMessages, mode, onComplete])
 
   return (
-    <>
-      <div className="flex flex-col h-[60vh] md:h-[70vh] pb-4 md:pb-0">
-        {/* AI Error Alert with Retry Button */}
-        {aiErrorMessage && (
-          <Alert variant="destructive" className="mb-4">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center">
-                <AlertCircle className="h-4 w-4 mr-2" />
-                <div>
-                  <AlertTitle>AI Chat Unavailable</AlertTitle>
-                  <AlertDescription>{aiErrorMessage}</AlertDescription>
-                </div>
-              </div>
-              <Button variant="outline" size="sm" onClick={handleRetryConnection} disabled={isRetrying} className="ml-2">
-                {isRetrying ? (
-                  <>
-                    <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                    Retrying...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-3 w-3 mr-1" />
-                    Retry
-                  </>
-                )}
-              </Button>
-            </div>
-          </Alert>
-        )}
-
-        <div className="flex-1 overflow-y-auto mb-4 space-y-4">
-          {/* Render guided mode messages */}
-          {mode === "guided" &&
-            messages.map((message) => (
-              <div key={message.id} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
-                {message.type === "system" && (
-                  <div className="mr-2 flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full overflow-hidden">
-                      <img src="/images/avatar.png" alt="Junk Butler" className="h-full w-full object-cover" />
-                    </div>
-                  </div>
-                )}
-                <div
-                  className={`max-w-[80%] rounded-lg p-3 chat-bubble-animation ${
-                    message.type === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
-                  }`}
-                >
-                  {renderMessageContent(message)}
-                  {renderMessageOptions(message)}
-                </div>
-              </div>
-            ))}
-
-          {/* Render AI mode messages */}
-          {mode === "ai" &&
-            aiMessages.filter(message => message.content.trim() !== "").map((message, index) => (
-              <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                {message.role === "assistant" && (
-                  <div className="mr-2 flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full overflow-hidden">
-                      <img src="/images/avatar.png" alt="Junksworth" className="h-full w-full object-cover" />
-                    </div>
-                  </div>
-                )}
-                <div
-                  className={`max-w-[80%] rounded-lg p-3 chat-bubble-animation ${
-                    message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
-                  }`}
-                >
-                  <p>{message.content}</p>
-                </div>
-              </div>
-            ))}
-
-          {/* Typing indicator */}
-          {(isTyping || isAiLoading || isRetrying) && (
-            <div className="flex justify-start">
-              <div className="mr-2 flex-shrink-0">
-                <div className="h-8 w-8 rounded-full overflow-hidden">
-                  <img src="/images/avatar.png" alt="Junk Butler" className="h-full w-full object-cover" />
-                </div>
-              </div>
-              <div className="max-w-[80%] rounded-lg p-3 bg-muted">
-                <div className="typing-indicator">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
+    <div className="flex flex-col h-[60vh] md:h-[70vh] pb-4 md:pb-0">
+      {/* AI Error Alert with Retry Button */}
+      {aiErrorMessage && (
+        <Alert variant="destructive" className="mb-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center">
+              <AlertCircle className="h-4 w-4 mr-2" />
+              <div>
+                <AlertTitle>AI Chat Unavailable</AlertTitle>
+                <AlertDescription>{aiErrorMessage}</AlertDescription>
               </div>
             </div>
-          )}
+            <Button variant="outline" size="sm" onClick={handleRetryConnection} disabled={isRetrying} className="ml-2">
+              {isRetrying ? (
+                <>
+                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                  Retrying...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Retry
+                </>
+              )}
+            </Button>
+          </div>
+        </Alert>
+      )}
 
-          <div ref={messagesEndRef} />
-        </div>
+      <div className="flex-1 overflow-y-auto mb-4 space-y-4">
+        {/* Render guided mode messages */}
+        {mode === "guided" &&
+          messages.map((message) => (
+            <div key={message.id} className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}>
+              {message.type === "system" && (
+                <div className="mr-2 flex-shrink-0">
+                  <div className="h-8 w-8 rounded-full overflow-hidden">
+                    <img src="/images/avatar.png" alt="Junk Butler" className="h-full w-full object-cover" />
+                  </div>
+                </div>
+              )}
+              <div
+                className={`max-w-[80%] rounded-lg p-3 chat-bubble-animation ${
+                  message.type === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
+                }`}
+              >
+                {renderMessageContent(message)}
+                {renderMessageOptions(message)}
+              </div>
+            </div>
+          ))}
 
-        {mode === "guided" && currentStep === 3 && (
-          <div className="mt-auto mb-4">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => document.getElementById("photo-upload")?.click()}
+        {/* Render AI mode messages */}
+        {mode === "ai" &&
+          aiMessages.filter(message => message.content.trim() !== "").map((message, index) => (
+            <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+              {message.role === "assistant" && (
+                <div className="mr-2 flex-shrink-0">
+                  <div className="h-8 w-8 rounded-full overflow-hidden">
+                    <img src="/images/avatar.png" alt="Junksworth" className="h-full w-full object-cover" />
+                  </div>
+                </div>
+              )}
+              <div
+                className={`max-w-[80%] rounded-lg p-3 chat-bubble-animation ${
+                  message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
+                }`}
               >
-                <Camera className="mr-2 h-4 w-4" />
-                Take Photo
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => document.getElementById("photo-upload")?.click()}
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                Upload Photo
-              </Button>
-              <input
-                id="photo-upload"
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={handlePhotoUpload}
-              />
+                <p>{message.content}</p>
+              </div>
+            </div>
+          ))}
+
+        {/* Typing indicator */}
+        {(isTyping || isAiLoading || isRetrying) && (
+          <div className="flex justify-start">
+            <div className="mr-2 flex-shrink-0">
+              <div className="h-8 w-8 rounded-full overflow-hidden">
+                <img src="/images/avatar.png" alt="Junk Butler" className="h-full w-full object-cover" />
+              </div>
+            </div>
+            <div className="max-w-[80%] rounded-lg p-3 bg-muted">
+              <div className="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Message Input UI */}
-        <form onSubmit={handleSendMessage} className="mt-auto border-t pt-3">
-          <div className="flex items-center gap-2">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button type="button" size="icon" variant="ghost" className="h-9 w-9 rounded-full">
-                  <Smile className="h-5 w-5 text-muted-foreground" />
-                  <span className="sr-only">Insert emoji</span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64 p-2" side="top" align="start">
-                <div className="grid grid-cols-8 gap-2">
-                  {commonEmojis.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      className="inline-flex h-8 w-8 items-start justify-center rounded-md text-lg hover:bg-muted"
-                      onClick={() => handleEmojiSelect(emoji)}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
+        <div ref={messagesEndRef} />
+      </div>
 
+      {mode === "guided" && currentStep === 3 && (
+        <div className="mt-auto mb-4">
+          <div className="flex items-center gap-2">
             <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-9 w-9 rounded-full"
-              onClick={handleAttachmentClick}
+              variant="outline"
+              className="flex-1"
+              onClick={() => document.getElementById("photo-upload")?.click()}
             >
-              <Paperclip className="h-5 w-5 text-muted-foreground" />
-              <span className="sr-only">Attach file</span>
+              <Camera className="mr-2 h-4 w-4" />
+              Take Photo
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => document.getElementById("photo-upload")?.click()}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Photo
             </Button>
             <input
-              ref={fileInputRef}
+              id="photo-upload"
               type="file"
               accept="image/*"
               multiple
               className="hidden"
               onChange={handlePhotoUpload}
             />
+          </div>
+        </div>
+      )}
 
-            <div className="relative flex-1">
-              <div className="border-input bg-background focus-within:ring-ring/10 relative flex items-center rounded-[16px] border px-4 py-1.5 pr-10 text-sm focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-0 min-h-[42px]">
-                <AutoResizeTextarea
-                  placeholder="Type a message..."
-                  value={mode === "ai" ? aiInput : currentInput}
-                  onChange={mode === "ai" ? 
-                    (value) => handleAiInputChange({ target: { value } } as React.ChangeEvent<HTMLInputElement>) : 
-                    (value) => setCurrentInput(value)
-                  }
-                  onEnter={handleSendMessage}
-                  className="resize-none overflow-hidden placeholder:text-muted-foreground flex-1 bg-transparent focus:outline-none py-1 leading-6"
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground px-3 absolute top-3 right-2 size-6 rounded-full"
-                  disabled={(mode === "ai" ? !aiInput.trim() : !currentInput.trim()) || isAiLoading || isRetrying}
-                >
-                  <ArrowUp className="h-4 w-4" />
-                  <span className="sr-only">Send message</span>
-                </Button>
+      {/* Message Input UI */}
+      <form onSubmit={handleSendMessage} className="mt-auto border-t pt-3">
+        <div className="flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button type="button" size="icon" variant="ghost" className="h-9 w-9 rounded-full">
+                <Smile className="h-5 w-5 text-muted-foreground" />
+                <span className="sr-only">Insert emoji</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-2" side="top" align="start">
+              <div className="grid grid-cols-8 gap-2">
+                {commonEmojis.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="inline-flex h-8 w-8 items-start justify-center rounded-md text-lg hover:bg-muted"
+                    onClick={() => handleEmojiSelect(emoji)}
+                  >
+                    {emoji}
+                  </button>
+                ))}
               </div>
+            </PopoverContent>
+          </Popover>
+
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-9 w-9 rounded-full"
+            onClick={handleAttachmentClick}
+          >
+            <Paperclip className="h-5 w-5 text-muted-foreground" />
+            <span className="sr-only">Attach file</span>
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={handlePhotoUpload}
+          />
+
+          <div className="relative flex-1">
+            <div className="border-input bg-background focus-within:ring-ring/10 relative flex items-center rounded-[16px] border px-4 py-1.5 pr-10 text-sm focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-0 min-h-[42px]">
+              <AutoResizeTextarea
+                placeholder="Type a message..."
+                value={mode === "ai" ? aiInput : currentInput}
+                onChange={mode === "ai" ? 
+                  (value) => handleAiInputChange({ target: { value } } as React.ChangeEvent<HTMLInputElement>) : 
+                  (value) => setCurrentInput(value)
+                }
+                onEnter={handleSendMessage}
+                className="resize-none overflow-hidden placeholder:text-muted-foreground flex-1 bg-transparent focus:outline-none py-1 leading-6"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                className="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground px-3 absolute top-3 right-2 size-6 rounded-full"
+                disabled={(mode === "ai" ? !aiInput.trim() : !currentInput.trim()) || isAiLoading || isRetrying}
+              >
+                <ArrowUp className="h-4 w-4" />
+                <span className="sr-only">Send message</span>
+              </Button>
             </div>
           </div>
+        </div>
 
-          {/* Mode switcher and reset button */}
-          <div className="flex justify-center mt-3 gap-2">
-            {currentStep > 0 && !aiErrorMessage && !isRetrying && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs text-muted-foreground"
-                onClick={() => {
-                  console.log("Switching mode from", mode, "to", mode === "guided" ? "ai" : "guided")
-                  if (mode === "guided") {
-                    switchToAiMode()
-                  } else {
-                    setMode("guided")
-                  }
-                }}
-                disabled={isAiLoading || isRetrying}
-              >
-                <Bot className="h-3 w-3 mr-1" />
-                {mode === "guided" ? "Chat with Junksworth" : "Return to Guided Flow"}
-                <ArrowRight className="h-3 w-3 ml-1" />
-              </Button>
-            )}
-
-            {mode === "ai" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs text-muted-foreground"
-                onClick={handleResetConversation}
-                disabled={isAiLoading || isRetrying}
-              >
-                <RefreshCw className="h-3 w-3 mr-1" />
-                Reset Conversation
-              </Button>
-            )}
-          </div>
-        </form>
-      </div>
-
-      <Dialog open={showEstimate} onOpenChange={setShowEstimate}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Your Custom Estimate</DialogTitle>
-            <DialogDescription>
-              Here's what we've prepared for your junk removal needs
-            </DialogDescription>
-          </DialogHeader>
-          
-          {estimateData && (
-            <div className="space-y-4">
-              <div className="grid gap-2">
-                <h3 className="font-semibold">Items to Remove</h3>
-                <p>{Array.isArray(estimateData.item_details.type) 
-                  ? estimateData.item_details.type.join(", ") 
-                  : estimateData.item_details.type}
-                </p>
-                <p>Quantity: {estimateData.item_details.quantity}</p>
-              </div>
-
-              <div className="grid gap-2">
-                <h3 className="font-semibold">Estimated Cost</h3>
-                <p>${estimateData.estimated_cost}</p>
-              </div>
-
-              <div className="grid gap-2">
-                <h3 className="font-semibold">Pickup Details</h3>
-                <p>{estimateData.location}</p>
-                <p>Access Notes: {estimateData.access_notes}</p>
-                <p>Requested Time: {estimateData.requested_pickup_time}</p>
-              </div>
-
-              <div className="grid gap-2">
-                <h3 className="font-semibold">Contact Information</h3>
-                <p>{estimateData.contact_info.name}</p>
-                <p>{estimateData.contact_info.phone}</p>
-                <p>{estimateData.contact_info.email}</p>
-              </div>
-
-              {estimateData.photos_provided && (
-                <p className="text-sm text-muted-foreground">Photos have been provided</p>
-              )}
-
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowEstimate(false)}>
-                  Return to Chat
-                </Button>
-                <Button onClick={() => onComplete({
-                  items: Array.isArray(estimateData.item_details.type) 
-                    ? estimateData.item_details.type 
-                    : [estimateData.item_details.type],
-                  quantity: estimateData.item_details.quantity === 1 ? "single" : "multiple",
-                  photos: [],
-                  resale: false
-                })}>
-                  Proceed with Estimate
-                </Button>
-              </div>
-            </div>
+        {/* Mode switcher and reset button */}
+        <div className="flex justify-center mt-3 gap-2">
+          {currentStep > 0 && !aiErrorMessage && !isRetrying && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground"
+              onClick={() => {
+                console.log("Switching mode from", mode, "to", mode === "guided" ? "ai" : "guided")
+                if (mode === "guided") {
+                  switchToAiMode()
+                } else {
+                  setMode("guided")
+                }
+              }}
+              disabled={isAiLoading || isRetrying}
+            >
+              <Bot className="h-3 w-3 mr-1" />
+              {mode === "guided" ? "Chat with Junksworth" : "Return to Guided Flow"}
+              <ArrowRight className="h-3 w-3 ml-1" />
+            </Button>
           )}
-        </DialogContent>
-      </Dialog>
-    </>
+
+          {mode === "ai" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground"
+              onClick={handleResetConversation}
+              disabled={isAiLoading || isRetrying}
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Reset Conversation
+            </Button>
+          )}
+        </div>
+      </form>
+    </div>
   )
 }
