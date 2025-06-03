@@ -696,28 +696,48 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
   // Handle AI message completion
   useEffect(() => {
     if (mode === "ai" && aiMessages.length > 0) {
-      const lastMessage = aiMessages[aiMessages.length - 1]
+      const lastMessage = aiMessages[aiMessages.length - 1];
       if (lastMessage.role === "assistant") {
-        const parsedData = tryParseJSON(lastMessage.content)
-        if (parsedData) {
-          // Convert AI data to match the booking form format
-          onComplete({
-            items: Array.isArray(parsedData.item_details.type) 
-              ? parsedData.item_details.type 
-              : [parsedData.item_details.type],
-            quantity: parsedData.item_details.quantity === 1 ? "single" : "multiple",
-            photos: [],
-            price: parsedData.estimated_cost,
-            resale: false,
-            location: parsedData.location,
-            access_notes: parsedData.access_notes,
-            pickup_time: parsedData.requested_pickup_time,
-            contact_info: parsedData.contact_info
-          })
+        // Try to extract JSON from the message
+        const jsonMatch = lastMessage.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            const jsonData = JSON.parse(jsonMatch[0]) as EstimateData;
+            
+            // Remove the JSON message from aiMessages
+            setAiMessages(prev => prev.filter(m => m.id !== lastMessage.id));
+            
+            // Add a clean message without the JSON
+            const cleanMessage = lastMessage.content.replace(/\{[\s\S]*\}/, '').trim();
+            if (cleanMessage) {
+              setAiMessages(prev => [...prev, {
+                id: lastMessage.id,
+                role: "assistant",
+                content: cleanMessage
+              }]);
+            }
+
+            // Convert AI data to match the booking form format
+            onComplete({
+              items: Array.isArray(jsonData.item_details.type) 
+                ? jsonData.item_details.type 
+                : [jsonData.item_details.type],
+              quantity: jsonData.item_details.quantity === 1 ? "single" : "multiple",
+              photos: [],
+              price: jsonData.estimated_cost,
+              resale: false,
+              location: jsonData.location,
+              access_notes: jsonData.access_notes,
+              pickup_time: jsonData.requested_pickup_time,
+              contact_info: jsonData.contact_info
+            });
+          } catch (error) {
+            console.error("Error parsing JSON from AI response:", error);
+          }
         }
       }
     }
-  }, [aiMessages, mode, onComplete])
+  }, [aiMessages, mode, onComplete]);
 
   return (
     <div className="flex flex-col h-[60vh] md:h-[70vh] pb-4 md:pb-0">
