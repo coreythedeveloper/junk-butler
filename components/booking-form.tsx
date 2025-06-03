@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { format } from "date-fns"
-import { CalendarIcon, CreditCard } from "lucide-react"
+import { CalendarIcon, CreditCard, CheckCircle, MapPin, Clock, User, Truck, DollarSign } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type BookingFormProps = {
@@ -22,23 +22,44 @@ type BookingFormProps = {
     photos: string[]
     price: number
     resale: boolean
+    location: string
+    access_notes: string
+    pickup_time: string
+    contact_info: {
+      name: string
+      phone: string
+      email: string
+    }
   }
   onComplete: () => void
 }
 
+// Map of item values to readable labels
+const itemLabels: Record<string, string> = {
+  furniture: "Furniture",
+  appliances: "Appliances",
+  electronics: "Electronics",
+  yard_waste: "Yard Waste",
+  construction: "Construction Debris",
+  household: "Household Items",
+  other: "Other Items",
+}
+
 export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
   const [date, setDate] = useState<Date | undefined>(undefined)
-  const [timeSlot, setTimeSlot] = useState<string>("")
+  const [timeSlot, setTimeSlot] = useState<string>(estimateData.pickup_time || "")
+  
+  // Pre-fill form data with estimate data
   const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    address: "",
-    city: "",
-    state: "",
-    zipCode: "",
-    specialInstructions: "",
+    firstName: estimateData.contact_info.name.split(' ')[0] || "",
+    lastName: estimateData.contact_info.name.split(' ').slice(1).join(' ') || "",
+    email: estimateData.contact_info.email || "",
+    phone: estimateData.contact_info.phone || "",
+    address: estimateData.location.split(',')[0] || "",
+    city: estimateData.location.split(',')[1]?.trim() || "",
+    state: estimateData.location.split(',')[2]?.trim() || "",
+    zipCode: estimateData.location.split(',')[3]?.trim() || "",
+    specialInstructions: estimateData.access_notes || "",
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -73,13 +94,72 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
   return (
     <form onSubmit={handleSubmit}>
       <div className="space-y-6">
+        {/* Estimate Summary Card */}
+        <Card className="border-green-200 bg-green-50">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-3">
+              <div className="bg-green-100 p-2 rounded-full">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+              <CardTitle>Your Estimate is Ready!</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-white rounded-lg p-4 mb-4 border border-green-200">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-lg">Estimate Details</h3>
+                <div className="text-2xl font-bold text-primary">${estimateData.price.toFixed(2)}</div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Items to Remove</h4>
+                  <p className="text-sm">{estimateData.items.map(item => itemLabels[item] || item).join(", ")}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Quantity: {estimateData.quantity === "single" ? "Single Item" : "Multiple Items"}
+                  </p>
+                </div>
+
+                {estimateData.resale && (
+                  <div className="bg-green-50 p-3 rounded-md text-sm text-green-700">
+                    <p className="font-medium">Resale Benefit</p>
+                    <p>You'll receive 40% of the sale price if we successfully resell your item(s).</p>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Truck className="h-4 w-4" />
+                  <span>Includes loading, transportation, and proper disposal</span>
+                </div>
+              </div>
+            </div>
+
+            {estimateData.photos.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {estimateData.photos.map((photo, index) => (
+                  <img
+                    key={index}
+                    src={photo}
+                    alt="Item photo"
+                    className="w-20 h-20 object-cover rounded-md border border-border"
+                  />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Scheduling Card */}
         <Card>
           <CardHeader>
             <CardTitle>Schedule Your Pickup</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-4">
-              <h3 className="font-medium">Select Date & Time</h3>
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-muted-foreground" />
+                <h3 className="font-medium">Select Date & Time</h3>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -101,7 +181,6 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
                         onSelect={setDate}
                         initialFocus
                         disabled={(date) => {
-                          // Disable dates in the past and Sundays
                           const today = new Date()
                           today.setHours(0, 0, 0, 0)
                           return date < today || date.getDay() === 0
@@ -130,7 +209,10 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
             </div>
 
             <div className="space-y-4">
-              <h3 className="font-medium">Contact Information</h3>
+              <div className="flex items-center gap-2">
+                <User className="h-5 w-5 text-muted-foreground" />
+                <h3 className="font-medium">Contact Information</h3>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -184,7 +266,10 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
             </div>
 
             <div className="space-y-4">
-              <h3 className="font-medium">Pickup Address</h3>
+              <div className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-muted-foreground" />
+                <h3 className="font-medium">Pickup Address</h3>
+              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="address">Street Address</Label>
@@ -210,7 +295,7 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="specialInstructions">Special Instructions (Optional)</Label>
+              <Label htmlFor="specialInstructions">Special Instructions</Label>
               <Textarea
                 id="specialInstructions"
                 name="specialInstructions"
@@ -223,6 +308,7 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
           </CardContent>
         </Card>
 
+        {/* Payment Card */}
         <Card>
           <CardHeader>
             <CardTitle>Payment</CardTitle>
@@ -230,7 +316,7 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
           <CardContent>
             <div className="bg-muted p-4 rounded-md mb-4">
               <div className="flex justify-between mb-2">
-                <span>Estimate Total</span>
+                <span>Total Due at Pickup</span>
                 <span className="font-bold">${estimateData.price.toFixed(2)}</span>
               </div>
               <p className="text-sm text-muted-foreground">
