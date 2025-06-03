@@ -710,18 +710,23 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
         
         if (jsonMatch) {
           try {
+            // Remove the current message from the chat immediately
+            setAiMessages(prev => prev.filter(m => m.id !== lastMessage.id));
+
+            // Extract and parse the JSON
             const jsonData = JSON.parse(jsonMatch[0]) as EstimateData;
             console.log("Parsed AI response data:", jsonData);
-            console.log("Pickup time from AI:", jsonData.requested_pickup_time);
             
-            // Remove the JSON message from aiMessages
-            setAiMessages(prev => prev.filter(m => m.id !== lastMessage.id));
-            
-            // Add a clean message without the JSON
-            const cleanMessage = lastMessage.content.replace(/\{[\s\S]*\}/, '').trim();
+            // Get the clean message without JSON
+            const cleanMessage = lastMessage.content
+              .replace(/\{[\s\S]*\}/, '') // Remove JSON
+              .replace(/\n+/g, ' ') // Remove extra newlines
+              .trim();
+              
             console.log("Clean message (without JSON):", cleanMessage);
             
-            if (cleanMessage) {
+            // Only add the clean message if it's not just whitespace
+            if (cleanMessage && !/^[\s\n]*$/.test(cleanMessage)) {
               setAiMessages(prev => [...prev, {
                 id: lastMessage.id,
                 role: "assistant",
@@ -729,7 +734,7 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
               }]);
             }
 
-            // Try to parse the pickup time into date and time slot
+            // Process the pickup time
             const pickupTime = jsonData.requested_pickup_time;
             console.log("Processing pickup time:", pickupTime);
 
