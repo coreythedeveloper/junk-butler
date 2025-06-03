@@ -46,9 +46,22 @@ const itemLabels: Record<string, string> = {
 }
 
 export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
+  // Available time slots
+  const timeSlots = [
+    "8:00 AM - 10:00 AM",
+    "10:00 AM - 12:00 PM",
+    "12:00 PM - 2:00 PM",
+    "2:00 PM - 4:00 PM",
+    "4:00 PM - 6:00 PM",
+  ];
+
   // Try to parse the pickup time into a date and time slot
   const parsePickupDateTime = (pickupTime: string) => {
     try {
+      if (!pickupTime) {
+        return { date: undefined, timeSlot: "" };
+      }
+
       let parsedDate: Date | undefined;
       let timeSlot = "";
 
@@ -84,32 +97,50 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
       }
 
       // Try to parse the date
-      const dateText = pickupTime.replace(timeSlotMatch?.[0] || "", "").trim();
-      
-      // Try parsing as ISO date first
-      parsedDate = new Date(dateText);
-      
-      // If that fails, try other common formats
-      if (isNaN(parsedDate.getTime())) {
-        // Try MM/DD/YYYY
-        const mmddyyyy = dateText.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-        if (mmddyyyy) {
-          parsedDate = new Date(parseInt(mmddyyyy[3]), parseInt(mmddyyyy[1]) - 1, parseInt(mmddyyyy[2]));
-        }
-        // Try natural language dates
-        else {
-          const today = new Date();
-          if (dateText.toLowerCase().includes("tomorrow")) {
-            parsedDate = new Date(today.setDate(today.getDate() + 1));
-          } else if (dateText.toLowerCase().includes("next")) {
-            parsedDate = new Date(today.setDate(today.getDate() + 7));
-          }
-        }
+      let dateText = pickupTime;
+      if (timeSlotMatch) {
+        dateText = pickupTime.replace(timeSlotMatch[0], "").trim();
       }
 
-      // Ensure the date is valid
+      // Don't try to parse empty strings
+      if (!dateText) {
+        return { date: undefined, timeSlot };
+      }
+
+      try {
+        // Try parsing as ISO date first
+        parsedDate = new Date(dateText);
+        
+        // If that fails, try other common formats
+        if (isNaN(parsedDate.getTime())) {
+          // Try MM/DD/YYYY
+          const mmddyyyy = dateText.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          if (mmddyyyy) {
+            parsedDate = new Date(
+              parseInt(mmddyyyy[3]), 
+              parseInt(mmddyyyy[1]) - 1, 
+              parseInt(mmddyyyy[2])
+            );
+          }
+          // Try natural language dates
+          else {
+            const today = new Date();
+            if (dateText.toLowerCase().includes("tomorrow")) {
+              parsedDate = new Date(today);
+              parsedDate.setDate(today.getDate() + 1);
+            } else if (dateText.toLowerCase().includes("next")) {
+              parsedDate = new Date(today);
+              parsedDate.setDate(today.getDate() + 7);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error parsing date:", error);
+        parsedDate = undefined;
+      }
+
+      // Ensure the date is valid and set to noon
       if (parsedDate && !isNaN(parsedDate.getTime())) {
-        // Set time to noon to avoid timezone issues
         parsedDate.setHours(12, 0, 0, 0);
       } else {
         parsedDate = undefined;
@@ -117,7 +148,7 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
 
       return { date: parsedDate, timeSlot };
     } catch (error) {
-      console.error("Error parsing pickup time:", error);
+      console.error("Error in parsePickupDateTime:", error);
       return { date: undefined, timeSlot: "" };
     }
   };
@@ -180,22 +211,16 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
   };
 
   // Parse the pickup date and time
-  const { date: parsedDate, timeSlot: initialTimeSlot } = parsePickupDateTime(estimateData.pickup_time);
+  const { date: parsedDate, timeSlot: initialTimeSlot } = parsePickupDateTime(estimateData.pickup_time || "");
   
-  // Initialize state with parsed values
-  const [date, setDate] = useState<Date | undefined>(() => {
-    if (parsedDate && !isNaN(parsedDate.getTime())) {
-      return parsedDate;
-    }
-    return undefined;
-  });
+  // Initialize state with parsed values, using undefined as fallback
+  const [date, setDate] = useState<Date | undefined>(
+    parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate : undefined
+  );
   
-  const [timeSlot, setTimeSlot] = useState<string>(() => {
-    if (initialTimeSlot && timeSlots.includes(initialTimeSlot)) {
-      return initialTimeSlot;
-    }
-    return "";
-  });
+  const [timeSlot, setTimeSlot] = useState<string>(
+    initialTimeSlot && timeSlots.includes(initialTimeSlot) ? initialTimeSlot : ""
+  );
 
   // Parse the location
   const parsedLocation = parseLocation(estimateData.location);
@@ -232,15 +257,6 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
       onComplete()
     }, 1500)
   }
-
-  // Generate time slots for the selected date
-  const timeSlots = [
-    "8:00 AM - 10:00 AM",
-    "10:00 AM - 12:00 PM",
-    "12:00 PM - 2:00 PM",
-    "2:00 PM - 4:00 PM",
-    "4:00 PM - 6:00 PM",
-  ]
 
   return (
     <form onSubmit={handleSubmit}>
