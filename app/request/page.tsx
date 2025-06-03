@@ -4,11 +4,10 @@ import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { MobileNav } from "@/components/mobile-nav"
 import { ChatFlow } from "@/components/chat-flow"
-import { EstimateResult } from "@/components/estimate-result"
 import { BookingForm } from "@/components/booking-form"
 import { BottomNav } from "@/components/bottom-nav"
 
-type Step = "chat" | "estimate" | "booking"
+type Step = "chat" | "booking"
 
 export default function RequestPage() {
   const [currentStep, setCurrentStep] = useState<Step>("chat")
@@ -18,28 +17,32 @@ export default function RequestPage() {
     photos: string[]
     price: number
     resale: boolean
+    location: string
+    access_notes: string
+    pickup_time: string
+    contact_info: {
+      name: string
+      phone: string
+      email: string
+    }
   } | null>(null)
 
   const handleChatComplete = (data: {
     items: string[]
     quantity: "single" | "multiple"
     photos: string[]
+    price: number
     resale: boolean
+    location: string
+    access_notes: string
+    pickup_time: string
+    contact_info: {
+      name: string
+      phone: string
+      email: string
+    }
   }) => {
-    // Calculate a mock price based on the data
-    const basePrice = data.quantity === "single" ? 50 : 100
-    const itemsPrice = data.items.length * 25
-    const totalPrice = basePrice + itemsPrice
-
-    setEstimateData({
-      ...data,
-      price: totalPrice,
-    })
-
-    setCurrentStep("estimate")
-  }
-
-  const handleEstimateAccepted = () => {
+    setEstimateData(data)
     setCurrentStep("booking")
   }
 
@@ -61,14 +64,6 @@ export default function RequestPage() {
               <ChatFlow onComplete={handleChatComplete} />
             </CardContent>
           </Card>
-        )}
-
-        {currentStep === "estimate" && estimateData && (
-          <EstimateResult
-            data={estimateData}
-            onAccept={handleEstimateAccepted}
-            onRestart={() => setCurrentStep("chat")}
-          />
         )}
 
         {currentStep === "booking" && estimateData && (

@@ -700,7 +700,7 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
       if (lastMessage.role === "assistant") {
         const parsedData = tryParseJSON(lastMessage.content)
         if (parsedData) {
-          // Convert AI estimate data to match the EstimateResult format
+          // Convert AI data to match the booking form format
           onComplete({
             items: Array.isArray(parsedData.item_details.type) 
               ? parsedData.item_details.type 
