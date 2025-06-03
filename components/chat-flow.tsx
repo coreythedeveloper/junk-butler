@@ -48,8 +48,7 @@ type EstimateData = {
   estimated_cost: number
   location: string
   access_notes: string
-  requested_date: string // ISO format date string (YYYY-MM-DD)
-  requested_time_slot: string // One of the predefined time slots
+  requested_pickup_time: string // Using the field from the system prompt
   contact_info: {
     name: string
     phone: string
@@ -702,18 +701,26 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
   useEffect(() => {
     if (mode === "ai" && aiMessages.length > 0) {
       const lastMessage = aiMessages[aiMessages.length - 1];
+      console.log("New AI message received:", lastMessage);
+      
       if (lastMessage.role === "assistant") {
         // Try to extract JSON from the message
         const jsonMatch = lastMessage.content.match(/\{[\s\S]*\}/);
+        console.log("JSON match found:", jsonMatch ? "yes" : "no");
+        
         if (jsonMatch) {
           try {
             const jsonData = JSON.parse(jsonMatch[0]) as EstimateData;
+            console.log("Parsed AI response data:", jsonData);
+            console.log("Pickup time from AI:", jsonData.requested_pickup_time);
             
             // Remove the JSON message from aiMessages
             setAiMessages(prev => prev.filter(m => m.id !== lastMessage.id));
             
             // Add a clean message without the JSON
             const cleanMessage = lastMessage.content.replace(/\{[\s\S]*\}/, '').trim();
+            console.log("Clean message (without JSON):", cleanMessage);
+            
             if (cleanMessage) {
               setAiMessages(prev => [...prev, {
                 id: lastMessage.id,
@@ -722,23 +729,80 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
               }]);
             }
 
+            // Try to parse the pickup time into date and time slot
+            const pickupTime = jsonData.requested_pickup_time;
+            console.log("Processing pickup time:", pickupTime);
+            
+            // Simple time slot detection
+            let timeSlot = "";
+            const timeSlots = [
+              "8:00 AM - 10:00 AM",
+              "10:00 AM - 12:00 PM",
+              "12:00 PM - 2:00 PM",
+              "2:00 PM - 4:00 PM",
+              "4:00 PM - 6:00 PM",
+            ];
+            
+            // Try to find a matching time slot
+            for (const slot of timeSlots) {
+              if (pickupTime.includes(slot)) {
+                timeSlot = slot;
+                break;
+              }
+            }
+            
+            // If no exact match, try to parse time of day
+            if (!timeSlot) {
+              if (pickupTime.toLowerCase().includes("morning")) {
+                timeSlot = "8:00 AM - 10:00 AM";
+              } else if (pickupTime.toLowerCase().includes("afternoon")) {
+                timeSlot = "12:00 PM - 2:00 PM";
+              } else if (pickupTime.toLowerCase().includes("evening")) {
+                timeSlot = "4:00 PM - 6:00 PM";
+              }
+            }
+            
+            // Try to extract a date
+            let pickupDate = "";
+            try {
+              // Remove the time slot if found
+              let dateText = pickupTime;
+              if (timeSlot) {
+                dateText = pickupTime.replace(timeSlot, "").trim();
+              }
+              
+              // Try to parse as date
+              const parsedDate = new Date(dateText);
+              if (!isNaN(parsedDate.getTime())) {
+                pickupDate = parsedDate.toISOString().split('T')[0];
+              }
+            } catch (error) {
+              console.error("Error parsing date:", error);
+            }
+            
+            console.log("Extracted date and time:", { pickupDate, timeSlot });
+
             // Convert AI data to match the booking form format
-            onComplete({
+            const formData = {
               items: Array.isArray(jsonData.item_details.type) 
                 ? jsonData.item_details.type 
                 : [jsonData.item_details.type],
-              quantity: jsonData.item_details.quantity === 1 ? "single" : "multiple",
-              photos: [],
+              quantity: jsonData.item_details.quantity === 1 ? "single" as const : "multiple" as const,
+              photos: [] as string[],
               price: jsonData.estimated_cost,
               resale: false,
               location: jsonData.location,
               access_notes: jsonData.access_notes,
-              pickup_date: jsonData.requested_date,
-              pickup_time_slot: jsonData.requested_time_slot,
+              pickup_date: pickupDate,
+              pickup_time_slot: timeSlot,
               contact_info: jsonData.contact_info
-            });
+            };
+            
+            console.log("Data being sent to booking form:", formData);
+            onComplete(formData);
           } catch (error) {
-            console.error("Error parsing JSON from AI response:", error);
+            console.error("Error processing AI response:", error);
+            console.log("Raw message content:", lastMessage.content);
           }
         }
       }

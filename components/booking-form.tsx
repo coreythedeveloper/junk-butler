@@ -47,6 +47,8 @@ const itemLabels: Record<string, string> = {
 }
 
 export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
+  console.log("BookingForm received estimateData:", estimateData);
+
   // Available time slots
   const timeSlots = [
     "8:00 AM - 10:00 AM",
@@ -58,22 +60,38 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
 
   // Initialize date from ISO string
   const initializeDate = (dateStr: string) => {
+    console.log("Initializing date from:", dateStr);
     try {
       const parsed = new Date(dateStr);
-      return !isNaN(parsed.getTime()) ? parsed : undefined;
-    } catch {
+      const isValid = !isNaN(parsed.getTime());
+      console.log("Parsed date result:", isValid ? parsed : "Invalid date");
+      return isValid ? parsed : undefined;
+    } catch (error) {
+      console.error("Error parsing date:", error);
       return undefined;
     }
   };
 
   // Initialize time slot
   const initializeTimeSlot = (slot: string) => {
-    return timeSlots.includes(slot) ? slot : "";
+    console.log("Initializing time slot from:", slot);
+    const isValid = timeSlots.includes(slot);
+    console.log("Time slot valid:", isValid);
+    return isValid ? slot : "";
   };
 
   // Initialize states with the provided values
-  const [date, setDate] = useState<Date | undefined>(initializeDate(estimateData.pickup_date));
-  const [timeSlot, setTimeSlot] = useState<string>(initializeTimeSlot(estimateData.pickup_time_slot));
+  const [date, setDate] = useState<Date | undefined>(() => {
+    const initialDate = initializeDate(estimateData.pickup_date);
+    console.log("Initial date state:", initialDate);
+    return initialDate;
+  });
+  
+  const [timeSlot, setTimeSlot] = useState<string>(() => {
+    const initialTimeSlot = initializeTimeSlot(estimateData.pickup_time_slot);
+    console.log("Initial time slot state:", initialTimeSlot);
+    return initialTimeSlot;
+  });
   
   // Parse location into address components
   const parseLocation = (location: string) => {
@@ -170,11 +188,13 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
 
   // Handle date change
   const handleDateChange = (newDate: Date | undefined) => {
+    console.log("Date changed to:", newDate);
     setDate(newDate);
   };
 
   // Handle time slot change
   const handleTimeSlotChange = (newSlot: string) => {
+    console.log("Time slot changed to:", newSlot);
     setTimeSlot(newSlot);
   };
 
