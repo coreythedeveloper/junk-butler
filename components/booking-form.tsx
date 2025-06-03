@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns"
 import { CalendarIcon, CreditCard, CheckCircle, MapPin, Clock, User, Truck, DollarSign } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toast } from "@/components/ui/use-toast"
 
 type BookingFormProps = {
   estimateData: {
@@ -175,15 +176,58 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
     }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
-    // Simulate form submission
-    setTimeout(() => {
-      setIsSubmitting(false)
+    try {
+      // Combine all form data
+      const bookingData = {
+        ...formData,
+        date: date ? format(date, "yyyy-MM-dd") : "",
+        timeSlot,
+        items: estimateData.items,
+        price: estimateData.price,
+        photos: estimateData.photos
+      }
+
+      // Submit to our API endpoint
+      const response = await fetch("/api/bookings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(bookingData)
+      })
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to create booking")
+      }
+
+      // Show success message
+      toast({
+        title: "Booking Confirmed!",
+        description: "Your pickup has been scheduled. Check your email for details.",
+        duration: 5000
+      })
+
+      // Complete the booking process
       onComplete()
-    }, 1500)
+    } catch (error) {
+      console.error("Booking submission error:", error)
+      
+      // Show error message
+      toast({
+        title: "Booking Failed",
+        description: error instanceof Error ? error.message : "Failed to create booking. Please try again.",
+        variant: "destructive",
+        duration: 5000
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   // Handle date change
