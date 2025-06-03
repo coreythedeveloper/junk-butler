@@ -60,19 +60,35 @@ const commonEmojis = [
 
 export function ChatFlow({ onComplete }: ChatFlowProps) {
   const [currentInput, setCurrentInput] = useState("")
+  const [currentStep, setCurrentStep] = useState(0)
   const [isTyping, setIsTyping] = useState(false)
   const [chatData, setChatData] = useState({
     quantity: "" as "single" | "multiple",
     items: [] as string[],
     photos: [] as string[],
     resale: false,
+    location: "",
+    accessNotes: "",
+    pickupTime: "",
   })
+  const [isAIMode, setIsAIMode] = useState(false)
   const [aiErrorMessage, setAiErrorMessage] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const [isRetrying, setIsRetrying] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Predefined item types for selection
+  const itemTypes = [
+    { value: "furniture", label: "Furniture" },
+    { value: "appliances", label: "Appliances" },
+    { value: "electronics", label: "Electronics" },
+    { value: "yard_waste", label: "Yard Waste" },
+    { value: "construction", label: "Construction Debris" },
+    { value: "household", label: "Household Items" },
+    { value: "other", label: "Other" },
+  ]
 
   // Set up AI chat
   const {
@@ -98,6 +114,11 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
               ...prev,
               ...jsonData
             }))
+
+            // If we have all required data, complete the estimate
+            if (isEstimateComplete(jsonData)) {
+              onComplete(jsonData)
+            }
           }
         }
       } catch (error) {
@@ -134,20 +155,120 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
   // Initialize chat with welcome message
   useEffect(() => {
     const timer = setTimeout(() => {
-      setAiMessages([{
-        id: Date.now().toString(),
+      setAiMessages([])
+      setCurrentStep(1)
+      appendAiMessage({
         role: "assistant",
-        content: "Ah, splendid timing—I'm Junksworth, your ever-reliable butler for banishing junk. Let's get the lowdown: What type of items are we dealing with, and how much is there? Oh, and don't forget to mention your location, any access hurdles, and your ideal pickup time."
-      }])
+        content: "Are you removing one item or multiple items?",
+      })
     }, 300)
 
     return () => clearTimeout(timer)
   }, [])
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [aiMessages])
+  // Helper function to check if we have all required data for an estimate
+  const isEstimateComplete = (data: any) => {
+    const requiredFields = ['quantity', 'items', 'location', 'accessNotes', 'pickupTime']
+    return requiredFields.every(field => data[field] && data[field] !== '')
+  }
+
+  const handleQuantitySelection = (value: "single" | "multiple") => {
+    setChatData(prev => ({ ...prev, quantity: value }))
+    appendAiMessage({ role: "user", content: value === "single" ? "Single Item" : "Multiple Items" })
+    
+    setIsTyping(true)
+    setTimeout(() => {
+      setIsTyping(false)
+      appendAiMessage({
+        role: "assistant",
+        content: "What type of items are you removing? (Select all that apply)",
+      })
+      setCurrentStep(2)
+    }, 800)
+  }
+
+  const handleItemTypeSelection = (value: string) => {
+    const selectedItem = itemTypes.find((item) => item.value === value)
+    if (selectedItem && !chatData.items.includes(value)) {
+      setChatData(prev => ({
+        ...prev,
+        items: [...prev.items, value]
+      }))
+      appendAiMessage({ role: "user", content: `Added: ${selectedItem.label}` })
+    }
+  }
+
+  const handleContinueAfterItems = () => {
+    if (chatData.items.length === 0) {
+      appendAiMessage({
+        role: "assistant",
+        content: "Please select at least one item type."
+      })
+      return
+    }
+
+    const itemLabels = chatData.items.map(value => itemTypes.find(item => item.value === value)?.label || value)
+    appendAiMessage({ role: "user", content: `Selected items: ${itemLabels.join(", ")}` })
+
+    setIsTyping(true)
+    setTimeout(() => {
+      setIsTyping(false)
+      appendAiMessage({
+        role: "assistant",
+        content: "Could you upload a photo of the item(s)? This helps us provide an accurate estimate."
+      })
+      setCurrentStep(3)
+    }, 800)
+  }
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    const fileArray = Array.from(files)
+    const fileURLs = fileArray.map((file) => URL.createObjectURL(file))
+
+    setChatData(prev => ({
+      ...prev,
+      photos: [...prev.photos, ...fileURLs],
+    }))
+
+    const photoMessage = `I've uploaded ${files.length} photo${files.length > 1 ? 's' : ''} of the items.`
+    appendAiMessage({ role: "user", content: photoMessage })
+
+    setIsTyping(true)
+    setTimeout(() => {
+      setIsTyping(false)
+      appendAiMessage({
+        role: "assistant",
+        content: "Would you like us to attempt to resell your item(s)? You'll receive a portion of the sale price if we're successful.",
+      })
+      setCurrentStep(4)
+    }, 800)
+  }
+
+  const handleResaleSelection = (value: "yes" | "no") => {
+    const wantsResale = value === "yes"
+    setChatData(prev => ({
+      ...prev,
+      resale: wantsResale
+    }))
+
+    appendAiMessage({ 
+      role: "user", 
+      content: wantsResale ? "Yes, try to resell" : "No, just remove them" 
+    })
+
+    setIsTyping(true)
+    setTimeout(() => {
+      setIsTyping(false)
+      appendAiMessage({
+        role: "assistant",
+        content: "What's your location and are there any access challenges we should know about?"
+      })
+      setCurrentStep(5)
+    }, 800)
+  }
 
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) {
@@ -157,41 +278,70 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
     const messageText = aiInput.trim()
     if (!messageText) return
 
-    try {
-      console.log("Sending message to AI:", messageText)
-      appendAiMessage({ role: "user", content: messageText })
-      // Clear input after sending
-      handleAiInputChange({ target: { value: "" } } as React.ChangeEvent<HTMLInputElement>)
-    } catch (error) {
-      console.error("Error sending message to AI:", error)
-      setAiErrorMessage("I'm having trouble processing that. Please try again.")
+    // If this is the first free-form message, switch to AI mode
+    if (!isAIMode) {
+      setIsAIMode(true)
+      // Send the current state to the AI for context
+      const context = JSON.stringify(chatData)
+      appendAiMessage({ 
+        role: "system", 
+        content: `Current estimate data: ${context}. Please continue gathering any missing information naturally.` 
+      })
     }
+
+    appendAiMessage({ role: "user", content: messageText })
+    handleAiInputChange({ target: { value: "" } } as React.ChangeEvent<HTMLInputElement>)
   }
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    // Convert FileList to array and create URLs for preview
-    const fileArray = Array.from(files)
-    const fileURLs = fileArray.map((file) => URL.createObjectURL(file))
-
-    setChatData((prev) => ({
-      ...prev,
-      photos: [...prev.photos, ...fileURLs],
-    }))
-
-    // Send a message about the uploaded photos
-    const photoMessage = `I've uploaded ${files.length} photo${files.length > 1 ? 's' : ''} of the items.`
-    appendAiMessage({ role: "user", content: photoMessage })
+  const handleEmojiSelect = (emoji: string) => {
+    handleAiInputChange({ target: { value: aiInput + emoji } } as React.ChangeEvent<HTMLInputElement>)
   }
 
   const handleAttachmentClick = () => {
     fileInputRef.current?.click()
   }
 
-  const handleEmojiSelect = (emoji: string) => {
-    handleAiInputChange({ target: { value: aiInput + emoji } } as React.ChangeEvent<HTMLInputElement>)
+  // Render functions for guided experience
+  const renderOptions = () => {
+    if (!isAIMode) {
+      switch (currentStep) {
+        case 1:
+          return (
+            <div className="flex flex-wrap gap-2 mt-3">
+              <Button variant="outline" onClick={() => handleQuantitySelection("single")}>Single Item</Button>
+              <Button variant="outline" onClick={() => handleQuantitySelection("multiple")}>Multiple Items</Button>
+            </div>
+          )
+        case 2:
+          return (
+            <div className="mt-3 space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                {itemTypes.map((option) => (
+                  <Button
+                    key={option.value}
+                    variant={chatData.items.includes(option.value) ? "default" : "outline"}
+                    className="justify-start"
+                    onClick={() => handleItemTypeSelection(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+              <Button onClick={handleContinueAfterItems}>Continue</Button>
+            </div>
+          )
+        case 4:
+          return (
+            <div className="flex flex-wrap gap-2 mt-3">
+              <Button variant="outline" onClick={() => handleResaleSelection("yes")}>Yes, try to resell</Button>
+              <Button variant="outline" onClick={() => handleResaleSelection("no")}>No, just remove them</Button>
+            </div>
+          )
+        default:
+          return null
+      }
+    }
+    return null
   }
 
   return (
@@ -226,7 +376,7 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
 
       <div className="flex-1 overflow-y-auto mb-4 space-y-4">
         {/* Render chat messages */}
-        {aiMessages.filter(message => message.content.trim() !== "").map((message, index) => (
+        {aiMessages.filter(message => message.content.trim() !== "" && message.role !== "system").map((message, index) => (
           <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
             {message.role === "assistant" && (
               <div className="mr-2 flex-shrink-0">
@@ -240,9 +390,10 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
                 message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
               }`}
             >
-              {message.role === "user" && message.content.includes("uploaded") ? (
-                <div>
-                  <p>{message.content}</p>
+              <div>
+                <p>{message.content}</p>
+                {message.role === "assistant" && renderOptions()}
+                {message.role === "user" && message.content.includes("uploaded") && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {chatData.photos.map((url, photoIndex) => (
                       <img
@@ -253,16 +404,14 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
                       />
                     ))}
                   </div>
-                </div>
-              ) : (
-                <p>{message.content}</p>
-              )}
+                )}
+              </div>
             </div>
           </div>
         ))}
 
         {/* Typing indicator */}
-        {(isAiLoading || isRetrying) && (
+        {(isTyping || isAiLoading || isRetrying) && (
           <div className="flex justify-start">
             <div className="mr-2 flex-shrink-0">
               <div className="h-8 w-8 rounded-full overflow-hidden">
@@ -281,6 +430,22 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Photo Upload UI for Step 3 */}
+      {currentStep === 3 && !isAIMode && (
+        <div className="mt-auto mb-4">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => fileInputRef.current?.click()}>
+              <Camera className="mr-2 h-4 w-4" />
+              Take Photo
+            </Button>
+            <Button variant="outline" className="flex-1" onClick={() => fileInputRef.current?.click()}>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Photo
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Message Input UI */}
       <form onSubmit={handleSendMessage} className="mt-auto border-t pt-3">
