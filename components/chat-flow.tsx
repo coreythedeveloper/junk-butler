@@ -732,7 +732,7 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
             // Try to parse the pickup time into date and time slot
             const pickupTime = jsonData.requested_pickup_time;
             console.log("Processing pickup time:", pickupTime);
-            
+
             // Simple time slot detection
             let timeSlot = "";
             const timeSlots = [
@@ -742,17 +742,33 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
               "2:00 PM - 4:00 PM",
               "4:00 PM - 6:00 PM",
             ];
-            
-            // Try to find a matching time slot
-            for (const slot of timeSlots) {
-              if (pickupTime.includes(slot)) {
-                timeSlot = slot;
-                break;
+
+            // First try to extract the time
+            const timeMatch = pickupTime.match(/(\d{1,2})(?::\d{2})?\s*(am|pm)/i);
+            console.log("Time match:", timeMatch);
+
+            if (timeMatch) {
+              const hour = parseInt(timeMatch[1]);
+              const meridian = timeMatch[2].toLowerCase();
+              console.log("Parsed time:", { hour, meridian });
+
+              // Map the hour to a time slot
+              const militaryHour = meridian === "pm" && hour !== 12 ? hour + 12 : hour;
+              console.log("Military hour:", militaryHour);
+
+              if (militaryHour >= 8 && militaryHour < 10) {
+                timeSlot = "8:00 AM - 10:00 AM";
+              } else if (militaryHour >= 10 && militaryHour < 12) {
+                timeSlot = "10:00 AM - 12:00 PM";
+              } else if (militaryHour >= 12 && militaryHour < 14) {
+                timeSlot = "12:00 PM - 2:00 PM";
+              } else if (militaryHour >= 14 && militaryHour < 16) {
+                timeSlot = "2:00 PM - 4:00 PM";
+              } else if (militaryHour >= 16 && militaryHour < 18) {
+                timeSlot = "4:00 PM - 6:00 PM";
               }
-            }
-            
-            // If no exact match, try to parse time of day
-            if (!timeSlot) {
+            } else {
+              // Fallback to time of day words
               if (pickupTime.toLowerCase().includes("morning")) {
                 timeSlot = "8:00 AM - 10:00 AM";
               } else if (pickupTime.toLowerCase().includes("afternoon")) {
@@ -761,25 +777,42 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
                 timeSlot = "4:00 PM - 6:00 PM";
               }
             }
-            
+
+            console.log("Selected time slot:", timeSlot);
+
             // Try to extract a date
             let pickupDate = "";
             try {
-              // Remove the time slot if found
-              let dateText = pickupTime;
-              if (timeSlot) {
-                dateText = pickupTime.replace(timeSlot, "").trim();
-              }
+              // Remove the time portion
+              const dateText = pickupTime.split(/\s*at\s*/)[0].trim();
+              console.log("Date text to parse:", dateText);
               
-              // Try to parse as date
+              // Try parsing with Date
               const parsedDate = new Date(dateText);
               if (!isNaN(parsedDate.getTime())) {
                 pickupDate = parsedDate.toISOString().split('T')[0];
+                console.log("Successfully parsed date:", pickupDate);
+              } else {
+                console.log("Failed to parse date directly");
+                
+                // Try parsing month, day, year format
+                const dateMatch = dateText.match(/([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
+                if (dateMatch) {
+                  const [_, month, day, year] = dateMatch;
+                  const monthIndex = new Date(`${month} 1`).getMonth();
+                  if (!isNaN(monthIndex)) {
+                    const newDate = new Date(parseInt(year), monthIndex, parseInt(day));
+                    if (!isNaN(newDate.getTime())) {
+                      pickupDate = newDate.toISOString().split('T')[0];
+                      console.log("Successfully parsed date from parts:", pickupDate);
+                    }
+                  }
+                }
               }
             } catch (error) {
               console.error("Error parsing date:", error);
             }
-            
+
             console.log("Extracted date and time:", { pickupDate, timeSlot });
 
             // Convert AI data to match the booking form format
