@@ -30,6 +30,17 @@ type ChatFlowProps = {
   }) => void
 }
 
+type EstimateData = {
+  item_details: {
+    type: string | string[]
+    quantity: number
+  }
+  estimated_cost: number
+  location: string
+  access_notes: string
+  requested_pickup_time: string
+}
+
 // Common emojis for quick access
 const commonEmojis = [
   "👍",
@@ -611,6 +622,53 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
       })
     }
   }
+
+  // Function to try parsing JSON from a message
+  const tryParseJSON = (text: string): EstimateData | null => {
+    try {
+      // Remove any potential non-JSON text
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) return null
+      
+      const parsed = JSON.parse(jsonMatch[0])
+      
+      // Validate the parsed object has the required structure
+      if (
+        parsed &&
+        parsed.item_details &&
+        parsed.estimated_cost &&
+        parsed.location &&
+        parsed.access_notes &&
+        parsed.requested_pickup_time
+      ) {
+        return parsed as EstimateData
+      }
+    } catch (error) {
+      console.error("Error parsing JSON:", error)
+    }
+    return null
+  }
+
+  // Handle AI message completion
+  useEffect(() => {
+    if (mode === "ai" && aiMessages.length > 0) {
+      const lastMessage = aiMessages[aiMessages.length - 1]
+      if (lastMessage.role === "assistant") {
+        const estimateData = tryParseJSON(lastMessage.content)
+        if (estimateData) {
+          // Convert the AI's estimate data to match the guided flow format
+          onComplete({
+            items: Array.isArray(estimateData.item_details.type) 
+              ? estimateData.item_details.type 
+              : [estimateData.item_details.type],
+            quantity: estimateData.item_details.quantity === 1 ? "single" : "multiple",
+            photos: [], // AI flow doesn't handle photos yet
+            resale: false // AI flow doesn't handle resale yet
+          })
+        }
+      }
+    }
+  }, [aiMessages, mode, onComplete])
 
   return (
     <div className="flex flex-col h-[60vh] md:h-[70vh] pb-4 md:pb-0">
