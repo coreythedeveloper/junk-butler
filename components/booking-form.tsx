@@ -46,8 +46,134 @@ const itemLabels: Record<string, string> = {
 }
 
 export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
-  const [date, setDate] = useState<Date | undefined>(undefined)
-  const [timeSlot, setTimeSlot] = useState<string>(estimateData.pickup_time || "")
+  // Try to parse the pickup time into a date and time slot
+  const parsePickupDateTime = (pickupTime: string) => {
+    try {
+      // Common date formats that might come from the AI
+      const dateTimeFormats = [
+        "YYYY-MM-DD HH:mm:ss",
+        "MM/DD/YYYY HH:mm:ss",
+        "MM/DD/YYYY",
+        "YYYY-MM-DD",
+        "PPP",
+        "PP"
+      ];
+
+      let parsedDate: Date | undefined;
+      let timeSlot = "";
+
+      // First try to extract a time slot from the string
+      const timeSlotMatch = pickupTime.match(/(morning|afternoon|evening|\d{1,2}(?::\d{2})?\s*(?:am|pm)(?:\s*-\s*\d{1,2}(?::\d{2})?\s*(?:am|pm))?)/i);
+      if (timeSlotMatch) {
+        const matchedTime = timeSlotMatch[0].toLowerCase();
+        // Map the matched time to our available time slots
+        if (matchedTime.includes("morning") || (matchedTime.includes("am") && !matchedTime.includes("-"))) {
+          timeSlot = "8:00 AM - 10:00 AM";
+        } else if (matchedTime.includes("afternoon") || (matchedTime.includes("pm") && !matchedTime.includes("-"))) {
+          timeSlot = "12:00 PM - 2:00 PM";
+        } else if (matchedTime.includes("evening")) {
+          timeSlot = "4:00 PM - 6:00 PM";
+        }
+        // Try to match specific time ranges
+        else if (matchedTime.includes("-")) {
+          const slots = {
+            "8:00 AM - 10:00 AM": ["8", "8:00", "8am", "8:00am"],
+            "10:00 AM - 12:00 PM": ["10", "10:00", "10am", "10:00am"],
+            "12:00 PM - 2:00 PM": ["12", "12:00", "12pm", "12:00pm"],
+            "2:00 PM - 4:00 PM": ["2", "2:00", "2pm", "2:00pm"],
+            "4:00 PM - 6:00 PM": ["4", "4:00", "4pm", "4:00pm"]
+          };
+          
+          for (const [slot, patterns] of Object.entries(slots)) {
+            if (patterns.some(pattern => matchedTime.includes(pattern))) {
+              timeSlot = slot;
+              break;
+            }
+          }
+        }
+      }
+
+      // Try to parse the date
+      const dateMatch = pickupTime.replace(timeSlotMatch?.[0] || "", "").trim();
+      for (const format of dateTimeFormats) {
+        const parsed = new Date(dateMatch);
+        if (!isNaN(parsed.getTime())) {
+          parsedDate = parsed;
+          break;
+        }
+      }
+
+      return { date: parsedDate, timeSlot };
+    } catch (error) {
+      console.error("Error parsing pickup time:", error);
+      return { date: undefined, timeSlot: "" };
+    }
+  };
+
+  // Parse location into address components
+  const parseLocation = (location: string) => {
+    try {
+      // Remove any extra whitespace and split by commas
+      const parts = location.split(/,\s*/).map(part => part.trim());
+      
+      let address = parts[0] || "";
+      let city = "";
+      let state = "";
+      let zipCode = "";
+
+      // Look for ZIP code pattern in any part
+      const zipPattern = /\b\d{5}\b/;
+      parts.forEach(part => {
+        const zipMatch = part.match(zipPattern);
+        if (zipMatch) {
+          zipCode = zipMatch[0];
+          // Remove ZIP from the part
+          part = part.replace(zipPattern, "").trim();
+        }
+      });
+
+      // Look for state abbreviation pattern
+      const statePattern = /\b[A-Z]{2}\b/;
+      parts.forEach((part, index) => {
+        const stateMatch = part.match(statePattern);
+        if (stateMatch) {
+          state = stateMatch[0];
+          // If this part only contains the state (and maybe ZIP), use previous part as city
+          if (part.replace(statePattern, "").replace(zipPattern, "").trim() === "") {
+            city = parts[index - 1] || "";
+          }
+        }
+      });
+
+      // If city wasn't found in state parsing, use the second part if available
+      if (!city && parts.length > 1) {
+        city = parts[1];
+      }
+
+      return {
+        address,
+        city,
+        state,
+        zipCode
+      };
+    } catch (error) {
+      console.error("Error parsing location:", error);
+      return {
+        address: "",
+        city: "",
+        state: "",
+        zipCode: ""
+      };
+    }
+  };
+
+  // Parse the pickup date and time
+  const { date: parsedDate, timeSlot: initialTimeSlot } = parsePickupDateTime(estimateData.pickup_time);
+  const [date, setDate] = useState<Date | undefined>(parsedDate);
+  const [timeSlot, setTimeSlot] = useState<string>(initialTimeSlot);
+
+  // Parse the location
+  const parsedLocation = parseLocation(estimateData.location);
   
   // Pre-fill form data with estimate data
   const [formData, setFormData] = useState({
@@ -55,12 +181,12 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
     lastName: estimateData.contact_info.name.split(' ').slice(1).join(' ') || "",
     email: estimateData.contact_info.email || "",
     phone: estimateData.contact_info.phone || "",
-    address: estimateData.location.split(',')[0] || "",
-    city: estimateData.location.split(',')[1]?.trim() || "",
-    state: estimateData.location.split(',')[2]?.trim() || "",
-    zipCode: estimateData.location.split(',')[3]?.trim() || "",
-    specialInstructions: estimateData.access_notes || "",
-  })
+    address: parsedLocation.address,
+    city: parsedLocation.city,
+    state: parsedLocation.state,
+    zipCode: parsedLocation.zipCode,
+    specialInstructions: estimateData.access_notes || ""
+  });
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
