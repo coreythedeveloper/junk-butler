@@ -704,28 +704,45 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
       console.log("New AI message received:", lastMessage);
       
       if (lastMessage.role === "assistant") {
-        // Try to extract JSON from the message
-        const jsonMatch = lastMessage.content.match(/\{[\s\S]*\}/);
-        console.log("JSON match found:", jsonMatch ? "yes" : "no");
-        
-        if (jsonMatch) {
-          try {
-            // Remove the current message from the chat immediately
-            setAiMessages(prev => prev.filter(m => m.id !== lastMessage.id));
+        try {
+          // Try to parse the entire message as JSON first
+          let jsonData: EstimateData | null = null;
+          let cleanMessage = lastMessage.content;
 
-            // Extract and parse the JSON
-            const jsonData = JSON.parse(jsonMatch[0]) as EstimateData;
-            console.log("Parsed AI response data:", jsonData);
+          // Check if the entire message is JSON
+          if (lastMessage.content.trim().startsWith('{')) {
+            try {
+              jsonData = JSON.parse(lastMessage.content) as EstimateData;
+              cleanMessage = ""; // Pure JSON message, no text
+            } catch (e) {
+              console.log("Not a pure JSON message");
+            }
+          }
+
+          // If not pure JSON, try to extract JSON from the message
+          if (!jsonData) {
+            const jsonMatch = lastMessage.content.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              try {
+                jsonData = JSON.parse(jsonMatch[0]) as EstimateData;
+                cleanMessage = lastMessage.content
+                  .replace(/\{[\s\S]*\}/, '')
+                  .replace(/\n+/g, ' ')
+                  .trim();
+              } catch (e) {
+                console.error("Failed to parse JSON from message:", e);
+              }
+            }
+          }
+
+          // Process JSON data if found
+          if (jsonData && 'item_details' in jsonData) {
+            console.log("Valid JSON data found:", jsonData);
             
-            // Get the clean message without JSON
-            const cleanMessage = lastMessage.content
-              .replace(/\{[\s\S]*\}/, '') // Remove JSON
-              .replace(/\n+/g, ' ') // Remove extra newlines
-              .trim();
-              
-            console.log("Clean message (without JSON):", cleanMessage);
+            // Remove the original message
+            setAiMessages(prev => prev.filter(m => m.id !== lastMessage.id));
             
-            // Only add the clean message if it's not just whitespace
+            // Add back clean message if it exists
             if (cleanMessage && !/^[\s\n]*$/.test(cleanMessage)) {
               setAiMessages(prev => [...prev, {
                 id: lastMessage.id,
@@ -738,69 +755,37 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
             const pickupTime = jsonData.requested_pickup_time;
             console.log("Processing pickup time:", pickupTime);
 
-            // Simple time slot detection
+            // Extract time slot
             let timeSlot = "";
-            const timeSlots = [
-              "8:00 AM - 10:00 AM",
-              "10:00 AM - 12:00 PM",
-              "12:00 PM - 2:00 PM",
-              "2:00 PM - 4:00 PM",
-              "4:00 PM - 6:00 PM",
-            ];
-
-            // First try to extract the time
             const timeMatch = pickupTime.match(/(\d{1,2})(?::\d{2})?\s*(am|pm)/i);
-            console.log("Time match:", timeMatch);
-
+            
             if (timeMatch) {
               const hour = parseInt(timeMatch[1]);
               const meridian = timeMatch[2].toLowerCase();
-              console.log("Parsed time:", { hour, meridian });
-
-              // Map the hour to a time slot
               const militaryHour = meridian === "pm" && hour !== 12 ? hour + 12 : hour;
-              console.log("Military hour:", militaryHour);
-
-              if (militaryHour >= 8 && militaryHour < 10) {
-                timeSlot = "8:00 AM - 10:00 AM";
-              } else if (militaryHour >= 10 && militaryHour < 12) {
-                timeSlot = "10:00 AM - 12:00 PM";
-              } else if (militaryHour >= 12 && militaryHour < 14) {
-                timeSlot = "12:00 PM - 2:00 PM";
-              } else if (militaryHour >= 14 && militaryHour < 16) {
-                timeSlot = "2:00 PM - 4:00 PM";
-              } else if (militaryHour >= 16 && militaryHour < 18) {
-                timeSlot = "4:00 PM - 6:00 PM";
-              }
-            } else {
-              // Fallback to time of day words
-              if (pickupTime.toLowerCase().includes("morning")) {
-                timeSlot = "8:00 AM - 10:00 AM";
-              } else if (pickupTime.toLowerCase().includes("afternoon")) {
-                timeSlot = "12:00 PM - 2:00 PM";
-              } else if (pickupTime.toLowerCase().includes("evening")) {
-                timeSlot = "4:00 PM - 6:00 PM";
-              }
+              
+              if (militaryHour >= 8 && militaryHour < 10) timeSlot = "8:00 AM - 10:00 AM";
+              else if (militaryHour >= 10 && militaryHour < 12) timeSlot = "10:00 AM - 12:00 PM";
+              else if (militaryHour >= 12 && militaryHour < 14) timeSlot = "12:00 PM - 2:00 PM";
+              else if (militaryHour >= 14 && militaryHour < 16) timeSlot = "2:00 PM - 4:00 PM";
+              else if (militaryHour >= 16 && militaryHour < 18) timeSlot = "4:00 PM - 6:00 PM";
+            } else if (pickupTime.toLowerCase().includes("morning")) {
+              timeSlot = "8:00 AM - 10:00 AM";
+            } else if (pickupTime.toLowerCase().includes("afternoon")) {
+              timeSlot = "12:00 PM - 2:00 PM";
+            } else if (pickupTime.toLowerCase().includes("evening")) {
+              timeSlot = "4:00 PM - 6:00 PM";
             }
 
-            console.log("Selected time slot:", timeSlot);
-
-            // Try to extract a date
+            // Extract date
             let pickupDate = "";
+            const dateText = pickupTime.split(/\s*at\s*/)[0].trim();
+            
             try {
-              // Remove the time portion
-              const dateText = pickupTime.split(/\s*at\s*/)[0].trim();
-              console.log("Date text to parse:", dateText);
-              
-              // Try parsing with Date
               const parsedDate = new Date(dateText);
               if (!isNaN(parsedDate.getTime())) {
                 pickupDate = parsedDate.toISOString().split('T')[0];
-                console.log("Successfully parsed date:", pickupDate);
               } else {
-                console.log("Failed to parse date directly");
-                
-                // Try parsing month, day, year format
                 const dateMatch = dateText.match(/([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
                 if (dateMatch) {
                   const [_, month, day, year] = dateMatch;
@@ -809,18 +794,17 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
                     const newDate = new Date(parseInt(year), monthIndex, parseInt(day));
                     if (!isNaN(newDate.getTime())) {
                       pickupDate = newDate.toISOString().split('T')[0];
-                      console.log("Successfully parsed date from parts:", pickupDate);
                     }
                   }
                 }
               }
-            } catch (error) {
-              console.error("Error parsing date:", error);
+            } catch (e) {
+              console.error("Error parsing date:", e);
             }
 
             console.log("Extracted date and time:", { pickupDate, timeSlot });
 
-            // Convert AI data to match the booking form format
+            // Create form data
             const formData = {
               items: Array.isArray(jsonData.item_details.type) 
                 ? jsonData.item_details.type 
@@ -835,13 +819,13 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
               pickup_time_slot: timeSlot,
               contact_info: jsonData.contact_info
             };
-            
+
             console.log("Data being sent to booking form:", formData);
             onComplete(formData);
-          } catch (error) {
-            console.error("Error processing AI response:", error);
-            console.log("Raw message content:", lastMessage.content);
           }
+        } catch (error) {
+          console.error("Error processing message:", error);
+          console.log("Problematic message:", lastMessage.content);
         }
       }
     }
