@@ -24,7 +24,8 @@ type BookingFormProps = {
     resale: boolean
     location: string
     access_notes: string
-    pickup_time: string
+    pickup_date: string // ISO format date string
+    pickup_time_slot: string // Predefined time slot
     contact_info: {
       name: string
       phone: string
@@ -55,104 +56,25 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
     "4:00 PM - 6:00 PM",
   ];
 
-  // Try to parse the pickup time into a date and time slot
-  const parsePickupDateTime = (pickupTime: string) => {
+  // Initialize date from ISO string
+  const initializeDate = (dateStr: string) => {
     try {
-      if (!pickupTime) {
-        return { date: undefined, timeSlot: "" };
-      }
-
-      let parsedDate: Date | undefined;
-      let timeSlot = "";
-
-      // First try to extract a time slot from the string
-      const timeSlotMatch = pickupTime.match(/(morning|afternoon|evening|\d{1,2}(?::\d{2})?\s*(?:am|pm)(?:\s*-\s*\d{1,2}(?::\d{2})?\s*(?:am|pm))?)/i);
-      if (timeSlotMatch) {
-        const matchedTime = timeSlotMatch[0].toLowerCase();
-        // Map the matched time to our available time slots
-        if (matchedTime.includes("morning") || (matchedTime.includes("am") && !matchedTime.includes("-"))) {
-          timeSlot = "8:00 AM - 10:00 AM";
-        } else if (matchedTime.includes("afternoon") || (matchedTime.includes("pm") && !matchedTime.includes("-"))) {
-          timeSlot = "12:00 PM - 2:00 PM";
-        } else if (matchedTime.includes("evening")) {
-          timeSlot = "4:00 PM - 6:00 PM";
-        }
-        // Try to match specific time ranges
-        else if (matchedTime.includes("-")) {
-          const slots = {
-            "8:00 AM - 10:00 AM": ["8", "8:00", "8am", "8:00am"],
-            "10:00 AM - 12:00 PM": ["10", "10:00", "10am", "10:00am"],
-            "12:00 PM - 2:00 PM": ["12", "12:00", "12pm", "12:00pm"],
-            "2:00 PM - 4:00 PM": ["2", "2:00", "2pm", "2:00pm"],
-            "4:00 PM - 6:00 PM": ["4", "4:00", "4pm", "4:00pm"]
-          };
-          
-          for (const [slot, patterns] of Object.entries(slots)) {
-            if (patterns.some(pattern => matchedTime.toLowerCase().includes(pattern))) {
-              timeSlot = slot;
-              break;
-            }
-          }
-        }
-      }
-
-      // Try to parse the date
-      let dateText = pickupTime;
-      if (timeSlotMatch) {
-        dateText = pickupTime.replace(timeSlotMatch[0], "").trim();
-      }
-
-      // Don't try to parse empty strings
-      if (!dateText) {
-        return { date: undefined, timeSlot };
-      }
-
-      try {
-        // Try parsing as ISO date first
-        parsedDate = new Date(dateText);
-        
-        // If that fails, try other common formats
-        if (isNaN(parsedDate.getTime())) {
-          // Try MM/DD/YYYY
-          const mmddyyyy = dateText.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-          if (mmddyyyy) {
-            parsedDate = new Date(
-              parseInt(mmddyyyy[3]), 
-              parseInt(mmddyyyy[1]) - 1, 
-              parseInt(mmddyyyy[2])
-            );
-          }
-          // Try natural language dates
-          else {
-            const today = new Date();
-            if (dateText.toLowerCase().includes("tomorrow")) {
-              parsedDate = new Date(today);
-              parsedDate.setDate(today.getDate() + 1);
-            } else if (dateText.toLowerCase().includes("next")) {
-              parsedDate = new Date(today);
-              parsedDate.setDate(today.getDate() + 7);
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error parsing date:", error);
-        parsedDate = undefined;
-      }
-
-      // Ensure the date is valid and set to noon
-      if (parsedDate && !isNaN(parsedDate.getTime())) {
-        parsedDate.setHours(12, 0, 0, 0);
-      } else {
-        parsedDate = undefined;
-      }
-
-      return { date: parsedDate, timeSlot };
-    } catch (error) {
-      console.error("Error in parsePickupDateTime:", error);
-      return { date: undefined, timeSlot: "" };
+      const parsed = new Date(dateStr);
+      return !isNaN(parsed.getTime()) ? parsed : undefined;
+    } catch {
+      return undefined;
     }
   };
 
+  // Initialize time slot
+  const initializeTimeSlot = (slot: string) => {
+    return timeSlots.includes(slot) ? slot : "";
+  };
+
+  // Initialize states with the provided values
+  const [date, setDate] = useState<Date | undefined>(initializeDate(estimateData.pickup_date));
+  const [timeSlot, setTimeSlot] = useState<string>(initializeTimeSlot(estimateData.pickup_time_slot));
+  
   // Parse location into address components
   const parseLocation = (location: string) => {
     try {
@@ -210,18 +132,6 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
     }
   };
 
-  // Parse the pickup date and time
-  const { date: parsedDate, timeSlot: initialTimeSlot } = parsePickupDateTime(estimateData.pickup_time || "");
-  
-  // Initialize state with parsed values, using undefined as fallback
-  const [date, setDate] = useState<Date | undefined>(
-    parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate : undefined
-  );
-  
-  const [timeSlot, setTimeSlot] = useState<string>(
-    initialTimeSlot && timeSlots.includes(initialTimeSlot) ? initialTimeSlot : ""
-  );
-
   // Parse the location
   const parsedLocation = parseLocation(estimateData.location);
   
@@ -257,6 +167,16 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
       onComplete()
     }, 1500)
   }
+
+  // Handle date change
+  const handleDateChange = (newDate: Date | undefined) => {
+    setDate(newDate);
+  };
+
+  // Handle time slot change
+  const handleTimeSlotChange = (newSlot: string) => {
+    setTimeSlot(newSlot);
+  };
 
   return (
     <form onSubmit={handleSubmit}>
@@ -345,7 +265,7 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
                       <Calendar
                         mode="single"
                         selected={date}
-                        onSelect={setDate}
+                        onSelect={handleDateChange}
                         initialFocus
                         disabled={(date) => {
                           const today = new Date()
@@ -359,7 +279,7 @@ export function BookingForm({ estimateData, onComplete }: BookingFormProps) {
 
                 <div className="space-y-2">
                   <Label htmlFor="timeSlot">Time Slot</Label>
-                  <Select value={timeSlot} onValueChange={setTimeSlot} disabled={!date}>
+                  <Select value={timeSlot} onValueChange={handleTimeSlotChange}>
                     <SelectTrigger id="timeSlot">
                       <SelectValue placeholder="Select time" />
                     </SelectTrigger>

@@ -30,7 +30,8 @@ type ChatFlowProps = {
     resale: boolean
     location: string
     access_notes: string
-    pickup_time: string
+    pickup_date: string
+    pickup_time_slot: string
     contact_info: {
       name: string
       phone: string
@@ -47,7 +48,8 @@ type EstimateData = {
   estimated_cost: number
   location: string
   access_notes: string
-  requested_pickup_time: string
+  requested_date: string // ISO format date string (YYYY-MM-DD)
+  requested_time_slot: string // One of the predefined time slots
   contact_info: {
     name: string
     phone: string
@@ -97,7 +99,8 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
     price: 0,
     location: "",
     access_notes: "",
-    pickup_time: "",
+    pickup_date: "",
+    pickup_time_slot: "",
     contact_info: {
       name: "",
       phone: "",
@@ -453,7 +456,8 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
           // Set placeholder values for the new fields if they're empty
           location: chatData.location || "Not specified",
           access_notes: chatData.access_notes || "No special access notes",
-          pickup_time: chatData.pickup_time || "To be scheduled",
+          pickup_date: chatData.pickup_date || "To be scheduled",
+          pickup_time_slot: chatData.pickup_time_slot || "To be scheduled",
           contact_info: {
             name: chatData.contact_info.name || "Not provided",
             phone: chatData.contact_info.phone || "Not provided",
@@ -681,7 +685,8 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
         parsed.estimated_cost &&
         parsed.location &&
         parsed.access_notes &&
-        parsed.requested_pickup_time &&
+        parsed.requested_date &&
+        parsed.requested_time_slot &&
         parsed.contact_info &&
         typeof parsed.photos_provided === 'boolean'
       ) {
@@ -728,7 +733,8 @@ export function ChatFlow({ onComplete }: ChatFlowProps) {
               resale: false,
               location: jsonData.location,
               access_notes: jsonData.access_notes,
-              pickup_time: jsonData.requested_pickup_time,
+              pickup_date: jsonData.requested_date,
+              pickup_time_slot: jsonData.requested_time_slot,
               contact_info: jsonData.contact_info
             });
           } catch (error) {
